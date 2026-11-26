@@ -48,6 +48,17 @@ target_compile_definitions(WindowTopMost PRIVATE ${WTM_DEFS} WINDOWTOPMOST_EXPOR
 target_compile_options(WindowTopMost PRIVATE ${WTM_OPTS})
 target_link_libraries(WindowTopMost PRIVATE user32 advapi32 shell32)
 
+# --- mhook as a static library, for obs-indicator-hook.dll (drawing inside OpenGL games) ---
+add_library(mhook STATIC
+  "${WTM_ROOT}/IAMKeyHacker/mhook-lib/mhook.c"
+  "${WTM_ROOT}/IAMKeyHacker/disasm-lib/cpu.c"
+  "${WTM_ROOT}/IAMKeyHacker/disasm-lib/disasm.c"
+  "${WTM_ROOT}/IAMKeyHacker/disasm-lib/disasm_x86.c")
+set_target_properties(mhook PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
+target_include_directories(mhook PUBLIC "${WTM_ROOT}/IAMKeyHacker")
+target_compile_definitions(mhook PRIVATE UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS)
+target_compile_options(mhook PRIVATE ${WTM_OPTS})
+
 # WindowTopMost.dll injects IAMKeyHacker.dll by resolving it next to itself. Both MODULE
 # targets build into the same directory here, so they are already siblings; the install step
 # in the top-level CMakeLists packages the pair next to the plugin.

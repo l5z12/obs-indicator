@@ -46,6 +46,10 @@ add_library(overlay-core STATIC
   src/monitors.hpp
   src/topmost.cpp
   src/topmost.hpp
+  src/game-hook.cpp
+  src/game-hook.hpp
+  src/game-overlay-shared.hpp
+  src/module-path.hpp
   src/settings.hpp
   src/settings-dialog.cpp
   src/settings-dialog.hpp
@@ -53,7 +57,7 @@ add_library(overlay-core STATIC
 target_include_directories(overlay-core PUBLIC src)
 target_compile_definitions(overlay-core PUBLIC ${COMMON_DEFS})
 target_compile_options(overlay-core PRIVATE ${COMMON_OPTS})
-target_link_libraries(overlay-core PUBLIC d2d1 dwrite shcore user32 gdi32 comctl32 comdlg32 uxtheme)
+target_link_libraries(overlay-core PUBLIC d2d1 dwrite shcore user32 gdi32 comctl32 comdlg32 uxtheme psapi)
 
 add_library(obs-indicator MODULE
   src/plugin-main.cpp
@@ -72,10 +76,22 @@ set_target_properties(obs-indicator PROPERTIES PREFIX "")
 if(OBS_INDICATOR_WITH_FULLSCREEN_TOPMOST)
   add_subdirectory(third_party/WindowTopMost)
   add_dependencies(obs-indicator WindowTopMost)
+
+  # The DLL the plugin loads into fullscreen OpenGL games (Minecraft) to draw the overlay inside
+  # the game's frame, where no window can show. Only loaded with "Draw inside OpenGL games" on.
+  add_library(obs-indicator-hook MODULE src/hook/gl-hook.cpp src/game-overlay-shared.hpp)
+  target_include_directories(obs-indicator-hook PRIVATE src)
+  target_compile_definitions(obs-indicator-hook PRIVATE ${COMMON_DEFS})
+  target_compile_options(obs-indicator-hook PRIVATE ${COMMON_OPTS})
+  target_link_libraries(obs-indicator-hook PRIVATE mhook opengl32 psapi user32)
+  set_target_properties(obs-indicator-hook PROPERTIES PREFIX "")
+  add_dependencies(obs-indicator obs-indicator-hook)
+
   # Stage the DLLs next to the plugin in the build tree so a plain `cmake --build` is runnable.
   add_custom_command(TARGET obs-indicator POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_FILE:WindowTopMost>" "$<TARGET_FILE:IAMKeyHacker>" "$<TARGET_FILE_DIR:obs-indicator>")
+            "$<TARGET_FILE:WindowTopMost>" "$<TARGET_FILE:IAMKeyHacker>" "$<TARGET_FILE:obs-indicator-hook>"
+            "$<TARGET_FILE_DIR:obs-indicator>")
 endif()
 
 if(OBS_INDICATOR_BUILD_TOOLS)
@@ -105,7 +121,9 @@ install(DIRECTORY data/ DESTINATION data)
 
 # Bundle the WindowTopMost DLLs beside the plugin, plus their MIT licenses (as required).
 if(OBS_INDICATOR_WITH_FULLSCREEN_TOPMOST)
-  install(TARGETS WindowTopMost IAMKeyHacker LIBRARY DESTINATION . RUNTIME DESTINATION .)
+  install(TARGETS WindowTopMost IAMKeyHacker obs-indicator-hook LIBRARY DESTINATION . RUNTIME DESTINATION .)
+  # Symbols for the hook too: it runs inside games, so it may well show up in their crash dumps.
+  install(FILES $<TARGET_PDB_FILE:obs-indicator-hook> DESTINATION . OPTIONAL)
   install(FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/WindowTopMost/LICENSE"
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/WindowTopMost/IAMKeyHacker/mHook_COPYING"

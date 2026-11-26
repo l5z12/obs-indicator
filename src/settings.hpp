@@ -58,6 +58,10 @@ struct Settings {
 	// bands an ordinary desktop window can actually use are allowed (see kFullscreenBands in
 	// settings-dialog.cpp): ZBID_UIACCESS (2, the top) and ZBID_SYSTEM_TOOLS (16). Default UIAccess.
 	int fullscreen_band = 2; // ZBID_UIACCESS
+	// Sub-option of show_over_fullscreen, off by default: in fullscreen OpenGL games such as
+	// Minecraft the driver bypasses the compositor, so no window shows whatever its band. This
+	// loads obs-indicator-hook.dll into such a game to draw the overlay inside its frames.
+	bool draw_in_opengl_games = false;
 
 	void Clamp()
 	{

@@ -68,6 +68,12 @@ if ($Install) {
     if (Get-Process obs64 -ErrorAction SilentlyContinue) {
         throw 'OBS is running; close it first so the plugin DLL can be replaced.'
     }
+    # A game the overlay draws inside keeps obs-indicator-hook.dll loaded (and locked) until it exits.
+    $hook = Join-Path $InstallDir 'obs-indicator-hook.dll'
+    if (Test-Path $hook) {
+        try { [IO.File]::Open($hook, 'Open', 'ReadWrite', 'None').Dispose() }
+        catch { throw "$hook is in use; close the game the overlay draws inside first." }
+    }
     # Remove a copy installed in the pre-OBS-33 layout (bin\64bit), which OBS would flag as Legacy.
     $legacy = Join-Path $InstallDir 'bin'
     if (Test-Path (Join-Path $legacy '64bit\obs-indicator.dll')) {
