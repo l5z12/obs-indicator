@@ -56,6 +56,7 @@ jobs:
     permissions:
       contents: write       # push the `release` branch
       pull-requests: write  # open or update the pull request
+      actions: write        # start the build on the `release` branch
     steps:
       - uses: actions/checkout@v7
         with:
@@ -82,6 +83,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           knope prepare-release --verbose
+
+      # GitHub doesn't run workflows for pull requests opened with the built-in token, so the release pull request
+      # would never get the "Windows x64" check that main requires. Starting the build by hand is allowed.
+      - name: Build the release pull request
+        if: steps.changes.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --ref release --repo "$GITHUB_REPOSITORY"
 
   # Publishes a GitHub release when a push to main changes the version (the release pull request was merged), or
   # when the workflow is run by hand for a version that has no tag yet.
