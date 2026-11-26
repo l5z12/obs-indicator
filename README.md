@@ -16,6 +16,18 @@ into the game, and Display Capture and Window Capture then record the overlay.
 
 You need Windows 10 (version 2004 or newer) or Windows 11, and 64-bit OBS Studio 33 or newer.
 
+Open PowerShell and run:
+
+```powershell
+irm https://raw.githubusercontent.com/l5z12/obs-indicator/main/install.ps1 | iex
+```
+
+This downloads the latest release, checks it against the SHA-256 that GitHub lists for it, and installs it to
+`C:\ProgramData\obs-studio\plugins\obs-indicator`. If OBS has the plugin loaded, it waits for you to close OBS. Run
+the same line again to update.
+
+To install by hand instead:
+
 1. Download `obs-indicator-<version>-windows-x64.zip` from the
    [latest release](https://github.com/l5z12/obs-indicator/releases/latest).
 2. Close OBS (and any game the overlay draws inside) and extract the zip into `C:\ProgramData\obs-studio\plugins\`.
