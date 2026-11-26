@@ -102,11 +102,16 @@ std::vector<std::wstring> InstalledIcds()
 
 struct Modules {
 	bool read = false;   // the list could be read at all
-	bool opengl = false; // opengl32.dll and an OpenGL driver are loaded
-	bool vulkan = false; // vulkan-1.dll is loaded
+	bool opengl = false; // it renders with OpenGL (see ScanModules)
+	bool vulkan = false; // an OpenGL driver is loaded, but for Vulkan
 	bool hooked = false; // our hook is already loaded (from an earlier OBS)
 };
 
+// What a process renders with, from its modules in load order. An OpenGL game loads
+// opengl32.dll, which then loads the driver once the game sets up its window. A Vulkan game
+// has the Vulkan loader load the driver, and NVIDIA's driver (its OpenGL and Vulkan driver are
+// one DLL) pulls opengl32.dll in after itself. Whether vulkan-1.dll is loaded says nothing:
+// Minecraft loads it while rendering with OpenGL, to see whether Vulkan is available.
 Modules ScanModules(HANDLE process, const std::vector<std::wstring> &icds)
 {
 	Modules m;
@@ -115,19 +120,22 @@ Modules ScanModules(HANDLE process, const std::vector<std::wstring> &icds)
 	if (!EnumProcessModulesEx(process, mods, sizeof(mods), &needed, LIST_MODULES_ALL))
 		return m;
 	m.read = true;
-	bool opengl32 = false, icd = false;
+	const DWORD none = MAXDWORD;
+	DWORD opengl32 = none, icd = none; // positions in load order
 	const DWORD count = std::min<DWORD>(needed / sizeof(HMODULE), 1024);
 	for (DWORD i = 0; i < count; ++i) {
 		wchar_t name[MAX_PATH];
 		if (!GetModuleBaseNameW(process, mods[i], name, MAX_PATH))
 			continue;
-		opengl32 = opengl32 || _wcsicmp(name, L"opengl32.dll") == 0;
-		m.vulkan = m.vulkan || _wcsicmp(name, L"vulkan-1.dll") == 0;
+		if (opengl32 == none && _wcsicmp(name, L"opengl32.dll") == 0)
+			opengl32 = i;
 		m.hooked = m.hooked || _wcsicmp(name, kHookDll) == 0;
 		for (const std::wstring &d : icds)
-			icd = icd || _wcsicmp(name, d.c_str()) == 0;
+			if (icd == none && _wcsicmp(name, d.c_str()) == 0)
+				icd = i;
 	}
-	m.opengl = opengl32 && icd;
+	m.opengl = opengl32 != none && icd != none && opengl32 < icd;
+	m.vulkan = opengl32 != none && icd != none && opengl32 > icd;
 	return m;
 }
 
@@ -429,10 +437,9 @@ void GameHook::Look(HWND hwnd, DWORD pid, Known *again)
 		log_(false, "Draw inside OpenGL games: %s (pid %lu) already has the hook", exe.c_str(), pid);
 		return;
 	}
-	if (mods.opengl && mods.vulkan) {
-		// NVIDIA's OpenGL driver is its Vulkan driver too, and pulls in opengl32.dll, so every
-		// Vulkan game looks like this. Stay out: the overlay's windows show over Vulkan games.
-		log_(false, "Draw inside OpenGL games: %s (pid %lu) uses Vulkan, so the hook stays out of it",
+	if (mods.vulkan) {
+		// Stay out: the overlay's windows show over Vulkan games.
+		log_(false, "Draw inside OpenGL games: %s (pid %lu) renders with Vulkan, so the hook stays out of it",
 		     exe.c_str(), pid);
 		Skip(hwnd, pid, again, false);
 		return;
