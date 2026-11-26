@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  # The OBS release the plugin is built against (its headers and DLLs). When updating, change both values; see
-  # CONTRIBUTING.md for how to get the zip's digest.
+  # The OBS release the plugin is built against (its headers and DLLs). When updating, change both values. Digest:
+  # gh api repos/obsproject/obs-studio/releases/tags/<version> --jq '.assets[] | select(.name | endswith("-Windows-x64.zip")) | .digest'
   OBS_VERSION: 33.0.3
   OBS_SHA256: 18a68c325adbda6f6082d5281021a8d1e35a6432842800618e8690b71925c107
   KNOPE_VERSION: 0.24.0
