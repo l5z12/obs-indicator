@@ -525,13 +525,23 @@ struct Overlay::Impl {
 		topmost_band = wanted;
 		if (wanted) {
 			const auto band = (unsigned long)wanted;
-			const bool a = topmost.Raise(inst, ind_win.hwnd, band);
-			const bool b = topmost.Raise(inst, toast_win.hwnd, band);
-			if (a && b)
-				Log(false, "Show over fullscreen games: overlay raised into a high z-order band");
-			else
-				Log(true, "Show over fullscreen games: could not raise the overlay "
-					  "(WindowTopMost unavailable); keeping normal top-most behaviour");
+			const struct {
+				HWND hwnd;
+				const char *name;
+			} wins[] = {{ind_win.hwnd, "status indicator"}, {toast_win.hwnd, "notification"}};
+			for (const auto &w : wins) {
+				if (!topmost.Raise(inst, w.hwnd, band)) {
+					Log(true,
+					    "Show over fullscreen games: couldn't raise the %s window: %s. Keeping "
+					    "normal always-on-top behaviour",
+					    w.name, topmost.Failure().c_str());
+					// Keep both windows on the same layer: drop any that did move back down.
+					topmost.Lower(ind_win.hwnd);
+					topmost.Lower(toast_win.hwnd);
+					return;
+				}
+			}
+			Log(false, "Show over fullscreen games: overlay raised into z-order band %d", wanted);
 		} else {
 			topmost.Lower(ind_win.hwnd);
 			topmost.Lower(toast_win.hwnd);

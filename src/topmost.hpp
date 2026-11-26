@@ -3,6 +3,8 @@
 
 #include <windows.h>
 
+#include <string>
+
 namespace indicator {
 
 // Raises overlay windows into a high window-manager z-order band so they appear over fullscreen
@@ -31,12 +33,13 @@ public:
 	// stay. A later Raise() starts the helper again. Also runs on destruction.
 	void Release();
 
-	// Whether init has been attempted and failed (so the UI/log can explain the no-op).
-	bool Failed() const { return init_failed_; }
+	// Why the last Raise() returned false, in English for the log. Empty after a success.
+	const std::string &Failure() const { return failure_; }
 
 private:
 	bool EnsureInit(HMODULE module);
 	void UninitAndUnload();
+	bool Fail(const char *fmt, ...); // sets failure_, returns false
 
 	HMODULE dll_ = nullptr;
 	void *init_ = nullptr;     // WTMInit
@@ -44,6 +47,7 @@ private:
 	void *set_band_ = nullptr; // WTMSetWindowBand
 	bool init_done_ = false;
 	bool init_failed_ = false;
+	std::string failure_;
 };
 
 } // namespace indicator
