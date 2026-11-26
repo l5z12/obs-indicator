@@ -47,7 +47,7 @@ jobs:
           path: build/dist/*.zip
           if-no-files-found: error
 
-  # While change files are waiting in .changeset/, keep a "Release obs-indicator x.y.z" pull request up to date.
+  # While change files are waiting in .changeset/, keep a "chore: release obs-indicator x.y.z" pull request up to date.
   # It bumps the version in CMakeLists.txt, adds the changelog section and deletes the change files.
   release-pr:
     name: Release pull request
