@@ -90,7 +90,14 @@ jobs:
         if: steps.changes.outputs.count != '0'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run build.yml --ref release --repo "$GITHUB_REPOSITORY"
+        run: |
+          for attempt in 1 2 3; do
+            gh workflow run build.yml --ref release --repo "$GITHUB_REPOSITORY" && exit 0
+            echo "Starting the build failed (attempt $attempt), retrying in 15 seconds"
+            sleep 15
+          done
+          echo "::error::Couldn't start the build for the release pull request. Run the Build workflow on 'release' by hand."
+          exit 1
 
   # Publishes a GitHub release when a push to main changes the version (the release pull request was merged), or
   # when the workflow is run by hand for a version that has no tag yet.
