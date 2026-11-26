@@ -8,8 +8,8 @@ running the replay buffer, and a notification pops up when something happens, li
 
 ![The overlay over a game](docs/overlay.png)
 
-The overlay never appears in your recordings or stream, never takes focus, and doesn't hook into games, so
-anti-cheat has nothing to complain about.
+The overlay never appears in your recordings or stream, never takes focus, and doesn't hook into games (unless you
+turn on *Draw inside OpenGL games*), so anti-cheat has nothing to complain about.
 
 ## Install
 
@@ -32,8 +32,12 @@ To turn the overlay on and off while you play, set a key for **Toggle overlay in
 
 ## Troubleshooting
 
-- **The overlay doesn't show over a game.** The game is probably using an old exclusive fullscreen mode, which no
-  overlay can draw over without hooking into the game. Switch the game to borderless or windowed fullscreen.
+- **The overlay doesn't show over a game.** The game is probably using exclusive fullscreen, where its picture goes
+  straight to the screen and no window can show over it. Switch the game to borderless or windowed fullscreen.
+- **Minecraft (or another OpenGL game) hides the overlay in fullscreen.** Tick *Draw inside OpenGL games* under *Show
+  the overlay over fullscreen games*. The overlay is then drawn into the game's own picture by a small helper loaded
+  into the game, so it's off by default: don't use it with games that have anti-cheat. OBS's Game Capture still
+  leaves the overlay out, but Display Capture and Window Capture record it.
 - **The game is borderless or windowed but still covers the overlay.** Some games present with flip-model or
   independent flip, which can push a normal always-on-top window behind them. Tick *Show the overlay over fullscreen
   games (advanced)* in the settings: it raises the overlay into a higher window layer with

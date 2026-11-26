@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "overlay.hpp"
+#include "game-hook.hpp"
 #include "monitors.hpp"
 #include "topmost.hpp"
 
@@ -27,6 +28,7 @@ constexpr UINT WM_APP_WAKE = WM_APP + 1;
 constexpr UINT_PTR TIMER_FRAME = 1;   // animation frames
 constexpr UINT_PTR TIMER_WAKE = 2;    // one-shot: next clock tick / toast expiry
 constexpr UINT_PTR TIMER_TOPMOST = 3; // periodically re-assert z-order while visible
+constexpr UINT_PTR TIMER_GAME = 4;    // "draw inside OpenGL games": find games, follow what they draw
 
 constexpr uint64_t kFrameMs = 15;
 constexpr float kIndicatorFadeInMs = 160.0f;
@@ -84,21 +86,31 @@ bool IsTop(Corner c)
 	return c == Corner::TopLeft || c == Corner::TopRight;
 }
 
-// One click-through, top-most, per-pixel-alpha window plus the D2D target that paints it.
+// One click-through, top-most, per-pixel-alpha window plus the D2D target that paints it. With
+// "draw inside OpenGL games" on, what it presents also goes to `game` as layer `game_layer`, and
+// the window is "suppressed" (hidden while still logically shown) while a game draws it instead.
 struct LayeredWindow {
 	HWND hwnd = nullptr;
 	HDC mem = nullptr;
 	HBITMAP bmp = nullptr;
 	HGDIOBJ old = nullptr;
+	void *bits = nullptr; // the DIB's pixels, top-down premultiplied BGRA
 	int w = 0, h = 0;
+	int x = 0, y = 0;     // last presented position
+	BYTE alpha = 255;     // last presented opacity
 	bool shown = false;
+	bool suppressed = false;
+	GameHook *game = nullptr;
+	int game_layer = 0;
 	ComPtr<ID2D1DCRenderTarget> rt;
 	ComPtr<ID2D1Layer> layer;
 	ID2D1Factory *factory = nullptr;
 
-	bool Create(HINSTANCE inst, ID2D1Factory *f)
+	bool Create(HINSTANCE inst, ID2D1Factory *f, GameHook *g, int g_layer)
 	{
 		factory = f;
+		game = g;
+		game_layer = g_layer;
 		hwnd = CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW |
 					       WS_EX_NOACTIVATE,
 				       kOverlayClass, L"OBS Indicator", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, inst,
@@ -136,10 +148,11 @@ struct LayeredWindow {
 		bi.bmiHeader.biPlanes = 1;
 		bi.bmiHeader.biBitCount = 32;
 		bi.bmiHeader.biCompression = BI_RGB;
-		void *bits = nullptr;
-		HBITMAP nb = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+		void *nbits = nullptr;
+		HBITMAP nb = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &nbits, nullptr, 0);
 		if (!nb)
 			return false;
+		bits = nbits;
 		HGDIOBJ prev = SelectObject(mem, nb);
 		if (!old)
 			old = prev;
@@ -176,32 +189,61 @@ struct LayeredWindow {
 		return SUCCEEDED(hr);
 	}
 
-	void Present(int x, int y, BYTE alpha)
+	void Present(int nx, int ny, BYTE nalpha)
 	{
-		POINT dst{x, y}, src{0, 0};
+		POINT dst{nx, ny}, src{0, 0};
 		SIZE size{w, h};
-		BLENDFUNCTION bf{AC_SRC_OVER, 0, alpha, AC_SRC_ALPHA};
+		BLENDFUNCTION bf{AC_SRC_OVER, 0, nalpha, AC_SRC_ALPHA};
 		if (!UpdateLayeredWindow(hwnd, nullptr, &dst, &size, mem, &src, 0, &bf, ULW_ALPHA))
 			return;
+		x = nx;
+		y = ny;
+		alpha = nalpha;
+		if (game && game->Enabled()) {
+			GdiFlush(); // D2D drew into the DIB through GDI
+			game->Publish(game_layer, bits, w, h, x, y, alpha);
+		}
 		if (!shown) {
-			ShowWindow(hwnd, SW_SHOWNOACTIVATE);
 			shown = true;
-			BringToTop();
+			if (!suppressed) {
+				ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+				BringToTop();
+			}
 		}
 	}
 
 	void BringToTop() const
 	{
-		if (shown)
+		if (shown && !suppressed)
 			SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
 				     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
 	}
 
 	void Hide()
 	{
+		if (game)
+			game->Hide(game_layer);
 		if (shown) {
-			ShowWindow(hwnd, SW_HIDE);
+			if (!suppressed)
+				ShowWindow(hwnd, SW_HIDE);
 			shown = false;
+		}
+		suppressed = false; // decided afresh when it shows again
+	}
+
+	// Hide the window while a game draws its content, and bring it back when the game stops.
+	void SetSuppressed(bool s)
+	{
+		if (s == suppressed)
+			return;
+		suppressed = s;
+		if (!shown)
+			return;
+		if (s) {
+			ShowWindow(hwnd, SW_HIDE);
+		} else {
+			ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+			BringToTop();
 		}
 	}
 
@@ -223,8 +265,9 @@ struct LayeredWindow {
 			DestroyWindow(hwnd);
 			hwnd = nullptr;
 		}
-		shown = false;
+		shown = suppressed = false;
 		old = nullptr;
+		bits = nullptr;
 		w = h = 0;
 	}
 };
@@ -288,6 +331,7 @@ struct Overlay::Impl {
 	LayeredWindow ind_win, toast_win;
 	TopMost topmost; // raises the windows above fullscreen games when enabled
 	int topmost_band = 0; // band last asked of `topmost` (0 = normal top-most), even if it failed
+	GameHook gamehook{&Log}; // draws the overlay inside fullscreen OpenGL games when enabled
 	HWINEVENTHOOK fg_hook = nullptr;
 	Settings settings;
 	Status status;
@@ -297,6 +341,7 @@ struct Overlay::Impl {
 	uint64_t preview_start = 0;
 	bool frame_timer = false;
 	bool topmost_timer = false;
+	bool game_timer = false;
 
 	float ind_fade = 0; // 0..1
 	std::vector<IndicatorItem> ind_items; // what is (or was last) drawn
@@ -358,12 +403,14 @@ struct Overlay::Impl {
 			return false;
 		}
 		ctrl = c;
-		if (!ind_win.Create(inst, renderer.Factory()) || !toast_win.Create(inst, renderer.Factory())) {
+		if (!ind_win.Create(inst, renderer.Factory(), &gamehook, 0) ||
+		    !toast_win.Create(inst, renderer.Factory(), &gamehook, 1)) {
 			Log(true, "Failed to create overlay windows: %lu", GetLastError());
 			return false;
 		}
 		ApplyAffinity();
 		ApplyTopMost(); // after a restart, settings from before are still here
+		ApplyGameHook();
 
 		fg_hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, ForegroundHook, 0,
 					  0, WINEVENT_OUTOFCONTEXT);
@@ -379,6 +426,7 @@ struct Overlay::Impl {
 		}
 		topmost.Release();
 		topmost_band = 0;
+		gamehook.SetEnabled(inst, false);
 		ind_win.Destroy();
 		toast_win.Destroy();
 		if (HWND c = ctrl.exchange(nullptr))
@@ -414,7 +462,9 @@ struct Overlay::Impl {
 			return 0;
 		case WM_TIMER:
 			if (self) {
-				if (wp == TIMER_TOPMOST) {
+				if (wp == TIMER_GAME) {
+					self->PollGame();
+				} else if (wp == TIMER_TOPMOST) {
 					self->ind_win.BringToTop();
 					self->toast_win.BringToTop();
 				} else {
@@ -452,6 +502,8 @@ struct Overlay::Impl {
 		// A game going fullscreen may push itself above us; take the top spot back.
 		self->ind_win.BringToTop();
 		self->toast_win.BringToTop();
+		if (self->gamehook.Enabled())
+			self->PollGame();
 		if (self->settings.monitor_mode == MonitorMode::FollowForeground)
 			self->Invalidate();
 	}
@@ -496,6 +548,7 @@ struct Overlay::Impl {
 		if (affinity_changed)
 			ApplyAffinity();
 		ApplyTopMost();
+		ApplyGameHook();
 		if (!settings.enabled || !settings.notifications)
 			toasts.clear();
 		ind_signature.clear();
@@ -547,6 +600,31 @@ struct Overlay::Impl {
 			topmost.Lower(toast_win.hwnd);
 			topmost.Release();
 		}
+	}
+
+	// "Draw inside OpenGL games" (a sub-option of "show over fullscreen games"). Turning it on
+	// only prepares the shared memory; the hook is loaded into a game by PollGame() once a
+	// fullscreen OpenGL game is in front. ApplySettings() forces a redraw afterwards, which hands
+	// the current pixels over.
+	void ApplyGameHook()
+	{
+		const bool want = settings.enabled && settings.show_over_fullscreen && settings.draw_in_opengl_games;
+		if (want == gamehook.Enabled())
+			return;
+		gamehook.SetEnabled(inst, want);
+		if (!gamehook.Enabled()) {
+			ind_win.SetSuppressed(false);
+			toast_win.SetSuppressed(false);
+		}
+	}
+
+	// Loads the hook into a fullscreen OpenGL game in front, and hides each window while a game
+	// draws it (so it isn't drawn twice when the game is composited after all).
+	void PollGame()
+	{
+		gamehook.Poll();
+		ind_win.SetSuppressed(gamehook.DrawnInGame(0));
+		toast_win.SetSuppressed(gamehook.DrawnInGame(1));
 	}
 
 	void ApplyAffinity()
@@ -880,6 +958,14 @@ struct Overlay::Impl {
 			else
 				KillTimer(c, TIMER_TOPMOST);
 			topmost_timer = visible;
+		}
+		const bool game_poll = visible && gamehook.Enabled();
+		if (game_poll != game_timer) {
+			if (game_poll)
+				SetTimer(c, TIMER_GAME, 100, nullptr);
+			else
+				KillTimer(c, TIMER_GAME);
+			game_timer = game_poll;
 		}
 
 		if (animating) {

@@ -19,7 +19,7 @@ struct DialogContext {
 	std::vector<AudioSourceChoice> audio_sources;
 	std::wstring default_mic_label = L"Default (Mic/Aux)";
 	// Called with the dialog's current values when "Preview" is pressed. The "show over fullscreen
-	// games" choice is left at its saved value, so a preview never injects the Explorer helper.
+	// games" choices are left at their saved values, so a preview never injects any helper.
 	std::function<void(const Settings &)> preview;
 	// Translated text for a "Settings.*" key from data/locale, or empty to keep the built-in English.
 	std::function<std::wstring(const char *key)> text;

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "topmost.hpp"
+#include "module-path.hpp"
 
 #include <cstdarg>
 #include <cstdio>
@@ -20,20 +21,6 @@ using WTMSetWindowBandFn = BOOL (*)(HWND hWnd, HWND hWndInsertAfter, DWORD dwBan
 // WindowTopMost's error for "another process controls the Explorer helper" (third_party/
 // WindowTopMost/Common Headers/ErrorCodes.h, an obs-indicator addition).
 constexpr DWORD kErrorWtmInUse = 0x3F09;
-
-// Full path to a file sitting next to `module` (the plugin DLL).
-std::wstring SiblingPath(HMODULE module, const wchar_t *name)
-{
-	wchar_t buf[MAX_PATH];
-	DWORD n = GetModuleFileNameW(module, buf, MAX_PATH);
-	if (n == 0 || n >= MAX_PATH)
-		return {};
-	std::wstring path(buf, n);
-	const size_t slash = path.find_last_of(L"\\/");
-	path.resize(slash == std::wstring::npos ? 0 : slash + 1);
-	path += name;
-	return path;
-}
 
 } // namespace
 

@@ -118,6 +118,7 @@ constexpr ControlText kControlTexts[] = {
 	{IDC_HIDE_CAPTURE, "Settings.HideFromCapture"},
 	{IDC_SHOW_OVER_FULLSCREEN, "Settings.ShowOverFullscreen"},
 	{IDC_FS_BAND_LABEL, "Settings.Layer"},
+	{IDC_DRAW_IN_GAMES, "Settings.DrawInGames"},
 	{IDC_HOTKEY_HINT, "Settings.HotkeyTip"},
 	{IDC_PREVIEW, "Settings.Preview"},
 	{IDOK, "Settings.OK"},
@@ -266,7 +267,7 @@ void UpdateEnabled(HWND d)
 		IDC_IND_REPLAY, IDC_IND_VCAM, IDC_IND_TIMER, IDC_MIC_LABEL, IDC_MIC_MODE},
 	       ind);
 	enable({IDC_MIC_SOURCE, IDC_MIC_SOURCE_LABEL}, mic_ind || mic_toast);
-	enable({IDC_FS_BAND, IDC_FS_BAND_LABEL}, fs_band);
+	enable({IDC_FS_BAND, IDC_FS_BAND_LABEL, IDC_DRAW_IN_GAMES}, fs_band);
 	enable({IDC_TOAST_CORNER, IDC_TOAST_CORNER_LABEL, IDC_TOAST_LABEL_ABOUT, IDC_N_REC, IDC_N_STREAM,
 		IDC_N_REPLAY, IDC_N_SHOT, IDC_N_VCAM, IDC_N_MIC, IDC_TOAST_LABEL_FOR, IDC_TOAST_SECS,
 		IDC_TOAST_SECS_SPIN, IDC_TOAST_LABEL_SECS},
@@ -370,6 +371,7 @@ void InitControls(HWND d, DlgState &st)
 			band_sel = i;
 	}
 	Select(d, IDC_FS_BAND, band_sel);
+	Check(d, IDC_DRAW_IN_GAMES, s.draw_in_opengl_games);
 
 	UpdateEnabled(d);
 }
@@ -421,6 +423,7 @@ Settings ReadControls(HWND d, const DlgState &st)
 		if (bi >= 0 && bi < kFullscreenBandCount)
 			s.fullscreen_band = kFullscreenBands[bi].band;
 	}
+	s.draw_in_opengl_games = Checked(d, IDC_DRAW_IN_GAMES);
 	s.Clamp();
 	return s;
 }
@@ -464,11 +467,12 @@ INT_PTR CALLBACK DlgProc(HWND d, UINT msg, WPARAM wp, LPARAM lp)
 		case IDC_PREVIEW:
 			if (st->ctx->preview) {
 				// Preview is for the overlay's look, so it keeps the saved "show over fullscreen
-				// games" choice: turning that on injects a helper into Explorer.exe, which should
+				// games" choices: they inject helpers into Explorer.exe and games, which should
 				// only happen once the user clicks OK.
 				Settings p = ReadControls(d, *st);
 				p.show_over_fullscreen = st->original.show_over_fullscreen;
 				p.fullscreen_band = st->original.fullscreen_band;
+				p.draw_in_opengl_games = st->original.draw_in_opengl_games;
 				st->ctx->preview(p);
 			}
 			return TRUE;

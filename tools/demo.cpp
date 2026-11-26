@@ -8,6 +8,9 @@
 //   overlay-demo.exe --dialog --snap x.png screenshot the dialog and close it
 //   overlay-demo.exe --snap x.png          screenshot the overlay corner mid-demo and exit
 //   overlay-demo.exe --capturable          don't hide the overlay from screen capture
+//   overlay-demo.exe --over-fullscreen     turn on "show the overlay over fullscreen games"
+//   overlay-demo.exe --in-game             ...and "draw inside OpenGL games" (needs obs-indicator-hook.dll
+//                                          next to the exe; start a fullscreen OpenGL game during the demo)
 //   overlay-demo.exe --locale de-DE.ini    use a translation from data/locale
 //   overlay-demo.exe --dialog --check-layout   list dialog text that doesn't fit its control, then close
 
@@ -227,7 +230,7 @@ int wmain(int argc, wchar_t **argv)
 	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 	CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
-	bool dialog = false, capturable = false;
+	bool dialog = false, capturable = false, over_fullscreen = false, in_game = false;
 	int scale = 100;
 	Corner corner = Corner::TopRight;
 	for (int i = 1; i < argc; i++) {
@@ -236,6 +239,10 @@ int wmain(int argc, wchar_t **argv)
 			dialog = true;
 		else if (a == L"--capturable")
 			capturable = true;
+		else if (a == L"--over-fullscreen")
+			over_fullscreen = true;
+		else if (a == L"--in-game")
+			over_fullscreen = in_game = true;
 		else if (a == L"--snap" && i + 1 < argc)
 			g_snap = argv[++i];
 		else if (a == L"--check-layout")
@@ -266,6 +273,8 @@ int wmain(int argc, wchar_t **argv)
 	s.notify_mic = true;
 	s.hide_from_capture = !capturable;
 	s.scale_percent = scale;
+	s.show_over_fullscreen = over_fullscreen;
+	s.draw_in_opengl_games = in_game;
 	overlay.SetSettings(s);
 	if (!overlay.Start(GetModuleHandleW(nullptr))) {
 		fprintf(stderr, "overlay failed to start\n");
