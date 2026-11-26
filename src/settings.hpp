@@ -49,6 +49,15 @@ struct Settings {
 	MonitorMode monitor_mode = MonitorMode::Primary;
 	std::wstring monitor_device; // e.g. L"\\\\.\\DISPLAY2" for MonitorMode::Specific
 	bool hide_from_capture = true;
+	// Advanced, off by default: raise the overlay into a high window-manager z-order band so it
+	// shows over fullscreen games that out-rank a normal top-most window. Uses WindowTopMost,
+	// which injects a helper into Explorer.exe, so it is opt-in. No effect on true exclusive
+	// fullscreen (that bypasses the compositor).
+	bool show_over_fullscreen = false;
+	// Which z-order band to use when show_over_fullscreen is on, as a ZBID value. Only the two
+	// bands an ordinary desktop window can actually use are allowed (see kFullscreenBands in
+	// settings-dialog.cpp): ZBID_UIACCESS (2, the top) and ZBID_SYSTEM_TOOLS (16). Default UIAccess.
+	int fullscreen_band = 2; // ZBID_UIACCESS
 
 	void Clamp()
 	{
@@ -67,6 +76,12 @@ struct Settings {
 			monitor_mode = MonitorMode::Primary;
 		if ((int)mic_mode < 0 || (int)mic_mode > 2)
 			mic_mode = MicMode::Off;
+		// win32k treats only ZBID_DESKTOP (1), ZBID_UIACCESS (2) and ZBID_SYSTEM_TOOLS (16) as
+		// non-immersive; a plain window placed in any other band drops out of the desktop z-order.
+		// Of those three, 1 is "no raising", so only 2 and 16 are offered. Anything else (including
+		// values saved by older builds that listed more bands) falls back to UIAccess (2, the top).
+		if (fullscreen_band != 2 && fullscreen_band != 16)
+			fullscreen_band = 2;
 	}
 };
 

@@ -154,6 +154,8 @@ void LoadSettings()
 	i("appearance.monitor_mode", s.monitor_mode);
 	s.monitor_device = Utf8ToWide(obs_data_get_string(d, "appearance.monitor_device"));
 	b("appearance.hide_from_capture", s.hide_from_capture);
+	b("appearance.show_over_fullscreen", s.show_over_fullscreen);
+	i("appearance.fullscreen_band", s.fullscreen_band);
 	s.Clamp();
 	g_settings = s;
 
@@ -197,6 +199,8 @@ void SaveSettings()
 	obs_data_set_int(d, "appearance.monitor_mode", (int)s.monitor_mode);
 	obs_data_set_string(d, "appearance.monitor_device", WideToUtf8(s.monitor_device).c_str());
 	obs_data_set_bool(d, "appearance.hide_from_capture", s.hide_from_capture);
+	obs_data_set_bool(d, "appearance.show_over_fullscreen", s.show_over_fullscreen);
+	obs_data_set_int(d, "appearance.fullscreen_band", s.fullscreen_band);
 
 	if (g_hotkey != OBS_INVALID_HOTKEY_ID) {
 		obs_data_array_t *hk = obs_hotkey_save(g_hotkey);

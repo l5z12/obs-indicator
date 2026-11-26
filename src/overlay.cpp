@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "overlay.hpp"
 #include "monitors.hpp"
+#include "topmost.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -285,6 +286,7 @@ struct Overlay::Impl {
 	// --- overlay thread only ---
 	Renderer renderer;
 	LayeredWindow ind_win, toast_win;
+	TopMost topmost; // raises the windows above fullscreen games when enabled
 	HWINEVENTHOOK fg_hook = nullptr;
 	Settings settings;
 	Status status;
@@ -373,6 +375,7 @@ struct Overlay::Impl {
 			UnhookWinEvent(fg_hook);
 			fg_hook = nullptr;
 		}
+		topmost.Shutdown();
 		ind_win.Destroy();
 		toast_win.Destroy();
 		if (HWND c = ctrl.exchange(nullptr))
@@ -485,14 +488,38 @@ struct Overlay::Impl {
 	{
 		s.Clamp();
 		const bool affinity_changed = s.hide_from_capture != settings.hide_from_capture;
+		const bool topmost_changed = s.show_over_fullscreen != settings.show_over_fullscreen ||
+					     (s.show_over_fullscreen && s.fullscreen_band != settings.fullscreen_band);
 		settings = std::move(s);
 		specific_mon_valid = false;
 		if (affinity_changed)
 			ApplyAffinity();
+		if (topmost_changed)
+			ApplyTopMost();
 		if (!settings.enabled || !settings.notifications)
 			toasts.clear();
 		ind_signature.clear();
 		toasts_dirty = true;
+	}
+
+	// Raise the overlay windows into a high z-order band so they show over fullscreen games, or
+	// drop them back when the option is turned off. The first raise injects a helper into
+	// Explorer.exe (via WindowTopMost), so it only runs when the user opts in.
+	void ApplyTopMost()
+	{
+		if (settings.show_over_fullscreen) {
+			const auto band = (unsigned long)settings.fullscreen_band;
+			const bool a = topmost.Raise(inst, ind_win.hwnd, band);
+			const bool b = topmost.Raise(inst, toast_win.hwnd, band);
+			if (a && b)
+				Log(false, "Show over fullscreen games: overlay raised into a high z-order band");
+			else
+				Log(true, "Show over fullscreen games: could not raise the overlay "
+					  "(WindowTopMost unavailable); keeping normal top-most behaviour");
+		} else {
+			topmost.Lower(ind_win.hwnd);
+			topmost.Lower(toast_win.hwnd);
+		}
 	}
 
 	void ApplyAffinity()
