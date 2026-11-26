@@ -6,8 +6,7 @@ body:
     attributes:
       value: |
         Thanks for taking the time to report this. If the overlay is missing over a particular game, please check
-        the **Limitations** section of the README first: games in legacy exclusive fullscreen can't be overlaid
-        without injecting into them, which this plugin deliberately doesn't do.
+        the **Troubleshooting** section of the README first.
 
   - type: textarea
     id: what-happened
