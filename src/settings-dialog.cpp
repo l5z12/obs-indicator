@@ -44,8 +44,62 @@ struct DlgState {
 	Settings result;
 };
 
-constexpr const wchar_t *kCorners[] = {L"Top left", L"Top right", L"Bottom left", L"Bottom right"};
-constexpr const wchar_t *kMicModes[] = {L"Off", L"Show when muted", L"Always show"};
+struct Choice {
+	const char *key;
+	const wchar_t *english;
+};
+constexpr Choice kCorners[] = {{"Settings.TopLeft", L"Top left"},
+			       {"Settings.TopRight", L"Top right"},
+			       {"Settings.BottomLeft", L"Bottom left"},
+			       {"Settings.BottomRight", L"Bottom right"}};
+constexpr Choice kMicModes[] = {{"Settings.MicOff", L"Off"},
+				{"Settings.MicWhenMuted", L"Show when muted"},
+				{"Settings.MicAlways", L"Always show"}};
+
+// Controls whose English text in obs-indicator.rc is replaced by a translation, if there is one.
+struct ControlText {
+	int id;
+	const char *key;
+};
+constexpr ControlText kControlTexts[] = {
+	{IDC_ENABLED, "Settings.Enable"},
+	{IDC_GRP_INDICATOR, "Settings.Indicator"},
+	{IDC_IND_SHOW, "Settings.ShowIndicator"},
+	{IDC_IND_CORNER_LABEL, "Settings.Position"},
+	{IDC_IND_LABEL_ICONS, "Settings.IconsFor"},
+	{IDC_IND_REC, "Settings.Recording"},
+	{IDC_IND_STREAM, "Settings.Streaming"},
+	{IDC_IND_REPLAY, "Settings.ReplayBuffer"},
+	{IDC_IND_VCAM, "Settings.VirtualCam"},
+	{IDC_IND_TIMER, "Settings.ShowTimer"},
+	{IDC_MIC_LABEL, "Settings.Microphone"},
+	{IDC_MIC_SOURCE_LABEL, "Settings.Source"},
+	{IDC_IND_HINT, "Settings.IndicatorHint"},
+	{IDC_GRP_TOAST, "Settings.Notifications"},
+	{IDC_TOAST_SHOW, "Settings.ShowNotifications"},
+	{IDC_TOAST_CORNER_LABEL, "Settings.Position"},
+	{IDC_TOAST_LABEL_ABOUT, "Settings.NotifyAbout"},
+	{IDC_N_REC, "Settings.Recording"},
+	{IDC_N_STREAM, "Settings.Streaming"},
+	{IDC_N_REPLAY, "Settings.ReplayBuffer"},
+	{IDC_N_SHOT, "Settings.Screenshots"},
+	{IDC_N_VCAM, "Settings.VirtualCam"},
+	{IDC_N_MIC, "Settings.MicMute"},
+	{IDC_TOAST_LABEL_FOR, "Settings.ShowFor"},
+	{IDC_TOAST_LABEL_SECS, "Settings.Seconds"},
+	{IDC_GRP_APPEARANCE, "Settings.Appearance"},
+	{IDC_MONITOR_LABEL, "Settings.Display"},
+	{IDC_SCALE_LABEL, "Settings.Size"},
+	{IDC_OPACITY_LABEL, "Settings.Opacity"},
+	{IDC_MARGIN_LABEL, "Settings.Margin"},
+	{IDC_ACCENT_LABEL, "Settings.AccentColor"},
+	{IDC_ACCENT_PICK, "Settings.Choose"},
+	{IDC_HIDE_CAPTURE, "Settings.HideFromCapture"},
+	{IDC_HOTKEY_HINT, "Settings.HotkeyTip"},
+	{IDC_PREVIEW, "Settings.Preview"},
+	{IDOK, "Settings.OK"},
+	{IDCANCEL, "Settings.Cancel"},
+};
 
 // Activates the Common Controls v6 manifest embedded in `module` (resource #2,
 // as for any DLL) so the dialog gets visual styles even if the host exe does
@@ -77,6 +131,39 @@ private:
 	ULONG_PTR cookie_ = 0;
 	bool active_ = false;
 };
+
+std::wstring Tr(const DlgState &st, const char *key, const wchar_t *english)
+{
+	if (st.ctx->text) {
+		std::wstring s = st.ctx->text(key);
+		if (!s.empty())
+			return s;
+	}
+	return english;
+}
+
+// Tr() for patterns like "%1 (not found)".
+std::wstring Tr1(const DlgState &st, const char *key, const wchar_t *english, const std::wstring &arg)
+{
+	std::wstring s = Tr(st, key, english);
+	if (const size_t at = s.find(L"%1"); at != std::wstring::npos)
+		s.replace(at, 2, arg);
+	return s;
+}
+
+void ApplyTexts(HWND d, const DlgState &st)
+{
+	if (!st.ctx->text)
+		return;
+	for (const auto &c : kControlTexts) {
+		const std::wstring s = st.ctx->text(c.key);
+		if (!s.empty())
+			SetDlgItemTextW(d, c.id, s.c_str());
+	}
+	const std::wstring title = st.ctx->text("Settings.Title");
+	if (!title.empty())
+		SetWindowTextW(d, title.c_str());
+}
 
 void Check(HWND d, int id, bool v)
 {
@@ -163,20 +250,21 @@ void UpdateEnabled(HWND d)
 void InitControls(HWND d, DlgState &st)
 {
 	const Settings &s = st.original;
+	ApplyTexts(d, st);
 	Check(d, IDC_ENABLED, s.enabled);
 
 	// Status indicator
 	Check(d, IDC_IND_SHOW, s.show_indicator);
-	for (auto *c : kCorners)
-		AddItem(d, IDC_IND_CORNER, c);
+	for (const auto &c : kCorners)
+		AddItem(d, IDC_IND_CORNER, Tr(st, c.key, c.english).c_str());
 	Select(d, IDC_IND_CORNER, (int)s.indicator_corner);
 	Check(d, IDC_IND_REC, s.ind_recording);
 	Check(d, IDC_IND_STREAM, s.ind_streaming);
 	Check(d, IDC_IND_REPLAY, s.ind_replay);
 	Check(d, IDC_IND_VCAM, s.ind_virtualcam);
 	Check(d, IDC_IND_TIMER, s.show_timer);
-	for (auto *m : kMicModes)
-		AddItem(d, IDC_MIC_MODE, m);
+	for (const auto &m : kMicModes)
+		AddItem(d, IDC_MIC_MODE, Tr(st, m.key, m.english).c_str());
 	Select(d, IDC_MIC_MODE, (int)s.mic_mode);
 
 	st.mic_names.clear();
@@ -195,14 +283,15 @@ void InitControls(HWND d, DlgState &st)
 		// Keep a configured source that doesn't exist right now (other scene collection).
 		mic_sel = (int)st.mic_names.size();
 		st.mic_names.push_back(s.mic_source);
-		AddItem(d, IDC_MIC_SOURCE, (Utf8ToWide(s.mic_source.c_str()) + L" (not found)").c_str());
+		AddItem(d, IDC_MIC_SOURCE,
+			Tr1(st, "Settings.NotFound", L"%1 (not found)", Utf8ToWide(s.mic_source.c_str())).c_str());
 	}
 	Select(d, IDC_MIC_SOURCE, mic_sel);
 
 	// Notifications
 	Check(d, IDC_TOAST_SHOW, s.notifications);
-	for (auto *c : kCorners)
-		AddItem(d, IDC_TOAST_CORNER, c);
+	for (const auto &c : kCorners)
+		AddItem(d, IDC_TOAST_CORNER, Tr(st, c.key, c.english).c_str());
 	Select(d, IDC_TOAST_CORNER, (int)s.toast_corner);
 	Check(d, IDC_N_REC, s.notify_recording);
 	Check(d, IDC_N_STREAM, s.notify_streaming);
@@ -213,19 +302,23 @@ void InitControls(HWND d, DlgState &st)
 	SetSpin(d, IDC_TOAST_SECS_SPIN, 1, 30, s.toast_seconds);
 
 	// Appearance
-	AddItem(d, IDC_MONITOR, L"Primary display");
-	AddItem(d, IDC_MONITOR, L"Display with the active window (follows your game)");
+	AddItem(d, IDC_MONITOR, Tr(st, "Settings.PrimaryDisplay", L"Primary display").c_str());
+	AddItem(d, IDC_MONITOR,
+		Tr(st, "Settings.ActiveWindowDisplay", L"Display with the active window (follows your game)").c_str());
 	int mon_sel = s.monitor_mode == MonitorMode::FollowForeground ? 1 : 0;
+	const std::wstring primary_tag = Tr(st, "Settings.PrimaryTag", L"primary");
 	for (const auto &m : EnumerateMonitors()) {
 		std::wstring label = m.device;
 		if (label.rfind(L"\\\\.\\", 0) == 0)
 			label.erase(0, 4);
 		if (!m.friendly_name.empty())
 			label += L": " + m.friendly_name;
-		wchar_t res[64];
-		swprintf(res, 64, L" (%ld×%ld%s)", m.rect.right - m.rect.left, m.rect.bottom - m.rect.top,
-			 m.primary ? L", primary" : L"");
+		wchar_t res[32];
+		swprintf(res, 32, L" (%ld×%ld", m.rect.right - m.rect.left, m.rect.bottom - m.rect.top);
 		label += res;
+		if (m.primary)
+			label += L", " + primary_tag;
+		label += L")";
 		if (s.monitor_mode == MonitorMode::Specific && _wcsicmp(m.device.c_str(), s.monitor_device.c_str()) == 0)
 			mon_sel = 2 + (int)st.monitor_devices.size();
 		st.monitor_devices.push_back(m.device);
@@ -234,7 +327,7 @@ void InitControls(HWND d, DlgState &st)
 	if (s.monitor_mode == MonitorMode::Specific && mon_sel == 0 && !s.monitor_device.empty()) {
 		mon_sel = 2 + (int)st.monitor_devices.size();
 		st.monitor_devices.push_back(s.monitor_device);
-		AddItem(d, IDC_MONITOR, (s.monitor_device + L" (disconnected)").c_str());
+		AddItem(d, IDC_MONITOR, Tr1(st, "Settings.Disconnected", L"%1 (disconnected)", s.monitor_device).c_str());
 	}
 	Select(d, IDC_MONITOR, mon_sel);
 

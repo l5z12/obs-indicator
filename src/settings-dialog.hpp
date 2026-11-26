@@ -20,6 +20,8 @@ struct DialogContext {
 	std::wstring default_mic_label = L"Default (Mic/Aux)";
 	// Called with the dialog's current values when "Preview" is pressed.
 	std::function<void(const Settings &)> preview;
+	// Translated text for a "Settings.*" key from data/locale, or empty to keep the built-in English.
+	std::function<std::wstring(const char *key)> text;
 };
 
 // Modal settings dialog. `resources` is the module holding IDD_SETTINGS.
