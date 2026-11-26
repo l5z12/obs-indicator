@@ -35,6 +35,11 @@
 // DLL injection object name
 #define IAMWORKER_IMAGENAME TEXT("IAMKeyHacker.dll")
 
+// obs-indicator patch: upper bound for the LoadLibrary/FreeLibrary threads run in Explorer.EXE.
+// Loading includes IAMKeyHacker's key capture, which takes a few seconds at most. Upstream waited
+// forever, so a stuck Explorer.EXE hung the host.
+#define WTM_REMOTE_THREAD_TIMEOUT (10000ul)
+
 // IAMController hWindow Information
 struct tag_IAMControllerWindow {
     HWND hWnd;
@@ -187,13 +192,17 @@ BOOL WTMAPI WTMUnloadWorker() {
         return FALSE;
     }
 
-    // Waiting for thread to end
-    WaitForSingleObject(hThread, INFINITE);
+    // Waiting for thread to end (obs-indicator patch: bounded)
+    DWORD nWait = WaitForSingleObject(hThread, WTM_REMOTE_THREAD_TIMEOUT);
 
     // Clear
     CloseHandle(hThread);
     CloseHandle(hProcess);
     CloseHandle(hSnapshot);
+    if (nWait != WAIT_OBJECT_0) {
+        SetLastError(ERROR_WTM_WORKER_CONTROL);
+        return FALSE;
+    }
     SetLastError(ERROR_SUCCESS);
     return TRUE;
 }
@@ -320,6 +329,10 @@ DWORD CALLBACK WTMControllerWindowThread(
         BOOL bRes = ChangeWindowMessageFilterEx(IAMControllerWindow.hWnd, WM_COPYDATA, MSGFLT_ADD, NULL); // Reduce permissions to accept WM_COPYDATA
         if (!bRes) {
             DEBUGERR("WTMControllerWindowThread: ChangeWindowMessageFilterEx error");
+            // obs-indicator patch: destroy the window first, or UnregisterClass fails and the
+            // still-registered class makes every later WTMInit fail.
+            DestroyWindow(IAMControllerWindow.hWnd);
+            IAMControllerWindow.hWnd = NULL;
             UnregisterClass(IAMCONTROLLER_WINDOW_CLASSNAME, hInstance);
             IAMControllerWindow.ThreadStop.LeaveThread();
             return 0;
@@ -451,8 +464,15 @@ BOOL WTMAPI WTMInit() {
         return FALSE;
     }
 
-    // Waiting for thread to end
-    WaitForSingleObject(hThread, INFINITE);
+    // Waiting for thread to end (obs-indicator patch: bounded)
+    if (WaitForSingleObject(hThread, WTM_REMOTE_THREAD_TIMEOUT) != WAIT_OBJECT_0) {
+        DEBUGERR("WTMInit: LoadLibrary in Explorer.EXE timed out");
+        // The remote thread may still read the path, so its memory is left allocated.
+        CloseHandle(hThread);
+        CloseHandle(hProcess);
+        SetLastError(ERROR_WTM_WORKER_CONTROL);
+        return FALSE;
+    }
 
     // Clear
     CloseHandle(hThread);
@@ -482,8 +502,15 @@ BOOL WTMAPI WTMInit() {
         return FALSE;
     }
     DEBUGLOG("WTMInit: Wait for window create");
-    WaitForSingleObject(IAMControllerWindow.hWindowCreateEvent, INFINITE);
-    CloseHandle(IAMControllerWindow.hWindowCreateEvent);
+    // obs-indicator patch: also wake if the thread exits early (its failure paths never set the
+    // event), and give up after a timeout. Upstream waited forever on the event alone. The event is
+    // closed in WTMStopController, once the thread can no longer set it.
+    HANDLE hCreateWait[2] = { IAMControllerWindow.hWindowCreateEvent, hWindowLoopThread };
+    if (WaitForMultipleObjects(2, hCreateWait, FALSE, IAMWORKER_TIMEOUT) != WAIT_OBJECT_0) {
+        DEBUGERR("WTMInit: IAMController window was not created");
+        SetLastError(ERROR_WTM_COMMUNICATION_MESSAGING);
+        return FALSE;
+    }
     DEBUGLOG("WTMInit: hWindow created");
 
     // Shaking hands with IAMWorker window
@@ -559,6 +586,9 @@ static BOOL WTMStopController() {
             return FALSE;
         }
         CloseHandle(IAMControllerWindow.hThread);
+    }
+    if (IAMControllerWindow.hWindowCreateEvent != NULL) {
+        CloseHandle(IAMControllerWindow.hWindowCreateEvent);
     }
     IAMControllerWindow.ThreadStop.Uninit();
     IAMControllerWindow.Reset();
