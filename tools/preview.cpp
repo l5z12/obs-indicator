@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Renders every indicator state, notification and icon into one PNG so the
 // artwork can be reviewed without OBS or a live overlay.
 //

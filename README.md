@@ -1,7 +1,7 @@
 # obs-indicator
 
 [![Latest release](https://img.shields.io/github/v/release/l5z12/obs-indicator)](https://github.com/l5z12/obs-indicator/releases/latest)
-[![License](https://img.shields.io/badge/license-GPL--2.0--or--later-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 
 A ShadowPlay-style overlay for OBS Studio on Windows. A small indicator shows while you're recording, streaming or
 running the replay buffer, and a notification pops up when something happens, like "Replay saved".
@@ -41,4 +41,4 @@ To turn the overlay on and off while you play, set a key for **Toggle overlay in
 
 ## License
 
-GPL-2.0-or-later. Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md).
+GPL-3.0-or-later. Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md).

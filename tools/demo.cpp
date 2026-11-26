@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Drives the real overlay with a scripted sequence of fake OBS events, or
 // opens the settings dialog, without OBS running.
 //

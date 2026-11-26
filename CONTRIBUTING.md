@@ -45,4 +45,4 @@ default: patch
 Use `patch` for fixes, `minor` for features and `major` for breaking changes. The heading goes into the changelog
 as written. [docs/releasing.md](docs/releasing.md) covers how releases are made.
 
-By contributing, you agree to license your work under GPL-2.0-or-later.
+By contributing, you agree to license your work under GPL-3.0-or-later.

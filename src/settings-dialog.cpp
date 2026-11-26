@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include "settings-dialog.hpp"
 #include "monitors.hpp"
 #include "resource.h"

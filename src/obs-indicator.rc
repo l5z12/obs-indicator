@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include <windows.h>
 #include <commctrl.h>
 #include "resource.h"
@@ -91,7 +91,7 @@ BEGIN
             VALUE "FileVersion", PLUGIN_VERSION
             VALUE "ProductName", "obs-indicator"
             VALUE "ProductVersion", PLUGIN_VERSION
-            VALUE "LegalCopyright", "GPL-2.0-or-later"
+            VALUE "LegalCopyright", "GPL-3.0-or-later"
         END
     END
     BLOCK "VarFileInfo"

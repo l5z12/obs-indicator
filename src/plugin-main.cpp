@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 //
 // OBS glue: turns frontend events into overlay status/notifications and owns
 // the persisted settings, the Tools menu entry and the toggle hotkey.
