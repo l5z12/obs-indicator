@@ -8,8 +8,9 @@ running the replay buffer, and a notification pops up when something happens, li
 
 ![The overlay over a game](docs/overlay.png)
 
-The overlay never appears in your recordings or stream, never takes focus, and doesn't hook into games (unless you
-turn on *Draw inside OpenGL games*), so anti-cheat has nothing to complain about.
+The overlay never appears in your recordings or stream, never takes focus, and doesn't hook into games, so
+anti-cheat has nothing to complain about. The one exception is the optional *Draw inside OpenGL games*: it hooks
+into the game, and Display Capture and Window Capture then record the overlay.
 
 ## Install
 
@@ -17,7 +18,7 @@ You need Windows 10 (version 2004 or newer) or Windows 11, and 64-bit OBS Studio
 
 1. Download `obs-indicator-<version>-windows-x64.zip` from the
    [latest release](https://github.com/l5z12/obs-indicator/releases/latest).
-2. Close OBS and extract the zip into `C:\ProgramData\obs-studio\plugins\`.
+2. Close OBS (and any game the overlay draws inside) and extract the zip into `C:\ProgramData\obs-studio\plugins\`.
 3. Start OBS.
 
 To uninstall, delete `C:\ProgramData\obs-studio\plugins\obs-indicator`.

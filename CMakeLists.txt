@@ -122,6 +122,8 @@ install(DIRECTORY data/ DESTINATION data)
 # Bundle the WindowTopMost DLLs beside the plugin, plus their MIT licenses (as required).
 if(OBS_INDICATOR_WITH_FULLSCREEN_TOPMOST)
   install(TARGETS WindowTopMost IAMKeyHacker obs-indicator-hook LIBRARY DESTINATION . RUNTIME DESTINATION .)
+  # Symbols for the hook too: it runs inside games, so it may well show up in their crash dumps.
+  install(FILES $<TARGET_PDB_FILE:obs-indicator-hook> DESTINATION . OPTIONAL)
   install(FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/WindowTopMost/LICENSE"
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/WindowTopMost/IAMKeyHacker/mHook_COPYING"

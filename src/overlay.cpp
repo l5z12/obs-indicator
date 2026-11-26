@@ -205,12 +205,17 @@ struct LayeredWindow {
 		}
 		if (!shown) {
 			shown = true;
+			// Decided before showing, so a new notification over a hooked game doesn't flash up
+			// as a window before the game draws it.
+			suppressed = game && game->GameDraws(game_layer, Rect());
 			if (!suppressed) {
 				ShowWindow(hwnd, SW_SHOWNOACTIVATE);
 				BringToTop();
 			}
 		}
 	}
+
+	RECT Rect() const { return RECT{x, y, x + w, y + h}; }
 
 	void BringToTop() const
 	{
@@ -623,8 +628,8 @@ struct Overlay::Impl {
 	void PollGame()
 	{
 		gamehook.Poll();
-		ind_win.SetSuppressed(gamehook.DrawnInGame(0));
-		toast_win.SetSuppressed(gamehook.DrawnInGame(1));
+		ind_win.SetSuppressed(gamehook.GameDraws(0, ind_win.Rect()));
+		toast_win.SetSuppressed(gamehook.GameDraws(1, toast_win.Rect()));
 	}
 
 	void ApplyAffinity()

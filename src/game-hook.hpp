@@ -12,7 +12,7 @@ namespace indicator {
 // sends frames straight to the display, past Windows' compositor, so no window can be seen over
 // it, whatever its z-order band. This loads obs-indicator-hook.dll into such a game and hands it
 // the overlay's pixels through shared memory; the hook draws them into the game's own frame (see
-// src/hook/gl-hook.cpp) and reports which layers it drew, so their windows can step aside.
+// src/hook/gl-hook.cpp) and reports the monitor it draws on, so the windows there step aside.
 //
 // Not thread-safe: use from the overlay thread.
 class GameHook {
@@ -25,8 +25,8 @@ public:
 	GameHook &operator=(const GameHook &) = delete;
 
 	// Turns drawing inside games on or off. The shared memory is created on first use; the hook
-	// DLL `module`'s folder holds is loaded into games only while this is on. Turning it off
-	// stops hooked games drawing; the DLL stays in them, idle, until they exit.
+	// DLL in `module`'s folder is loaded into games only while this is on. Turning it off stops
+	// hooked games drawing; the DLL stays in them, idle, until they exit.
 	void SetEnabled(HMODULE module, bool on);
 	bool Enabled() const { return enabled_; }
 
@@ -35,24 +35,43 @@ public:
 	void Publish(int layer, const void *bits, int w, int h, int x, int y, BYTE alpha);
 	void Hide(int layer);
 
-	// True if a game drew `layer` just now, so its window should stay hidden.
-	bool DrawnInGame(int layer) const;
+	// True if a hooked game, fullscreen and in front, is drawing published layer `layer` on the
+	// monitor where `rect` (physical pixels) lies, so the window there should stay hidden.
+	bool GameDraws(int layer, const RECT &rect) const;
 
 	// Loads the hook into the foreground window's process if that is a fullscreen OpenGL game,
-	// and logs what hooked games report. Call on foreground changes and often (~10 Hz) while the
-	// overlay is visible: games can go fullscreen without a foreground change.
+	// logs what hooked games report, and keeps OBS's heartbeat going. Call on foreground changes
+	// and about 10 times a second while the overlay is visible: games can go fullscreen without
+	// a foreground change, and hooks stop drawing when the heartbeat stops.
 	void Poll();
 
 private:
+	// A process looked at already, so it isn't opened every 100 ms.
 	struct Known {
 		DWORD pid;
-		HANDLE process; // SYNCHRONIZE, to notice the exit (and pid reuse); may be null
-		HWND hwnd;      // its fullscreen window; stands in for the process when that is null
+		HANDLE process;     // SYNCHRONIZE only, to notice the exit (and pid reuse); may be null
+		HWND hwnd;          // its fullscreen window; stands in for the process when that is null
+		ULONGLONG retry_at; // when to look again; 0 = never
+		int looks;
+	};
+	// A hook load still running in a game (the remote LoadLibraryW thread).
+	struct Loading {
+		DWORD pid;
+		HWND hwnd;
+		HANDLE process; // the rights to inject
+		HANDLE thread;
+		void *mem; // the DLL path inside the game
+		ULONGLONG started;
+		std::string exe;
 	};
 
 	bool Open();
-	void Inject(HWND hwnd, DWORD pid);
-	static bool Has(std::vector<Known> &list, DWORD pid);
+	void Beat();
+	void LogHookMessages();
+	void Look(HWND hwnd, DWORD pid, Known *again);
+	void Skip(HWND hwnd, DWORD pid, Known *again, bool look_again);
+	void FinishLoads();
+	static void Prune(std::vector<Known> &list);
 
 	LogFn log_;
 	bool enabled_ = false;
@@ -60,8 +79,10 @@ private:
 	void *view_ = nullptr;
 	size_t committed_[2] = {};
 	std::wstring dll_path_;
-	std::vector<Known> hooked_;  // processes the hook was loaded into
-	std::vector<Known> skipped_; // fullscreen processes that aren't OpenGL games, or failed
+	std::vector<std::wstring> icds_; // file names of the installed OpenGL drivers
+	std::vector<Known> hooked_;      // processes the hook is loaded in
+	std::vector<Known> skipped_;     // fullscreen processes it isn't (yet) loaded in
+	std::vector<Loading> loading_;
 	LONG last_msg_seq_ = 0;
 };
 

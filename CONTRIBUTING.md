@@ -20,11 +20,15 @@ No OBS installed? Run `.\scripts\fetch-obs-binaries.ps1 -Version 33.0.3` first, 
 - `src/plugin-main.cpp`: the OBS side (events, hotkey, settings, Tools menu)
 - `src/overlay.cpp`, `src/renderer.cpp`: the overlay windows and drawing, on their own thread
 - `src/settings-dialog.cpp`, `src/obs-indicator.rc`: the settings dialog
+- `src/topmost.cpp`, `third_party/WindowTopMost/`: *Show the overlay over fullscreen games*
+- `src/game-hook.cpp`, `src/hook/gl-hook.cpp`: *Draw inside OpenGL games*, which loads a hook into fullscreen OpenGL
+  games to draw the overlay in their frames
 - `tools/`: demo and preview programs that run without OBS
 
 ## Rules
 
-- OBS C API and Win32 only: no Qt, no hooking into games.
+- OBS C API and Win32 only, no Qt. No hooking into games except in `src/hook/`, which only runs when the user turns
+  on *Draw inside OpenGL games*.
 - OBS callbacks can run on any thread. Use `obs_queue_task` to get onto the UI thread.
 - No compiler warnings, and OBS code style (tabs, 120 columns).
 - Commit messages and PR titles use [Conventional Commits](https://www.conventionalcommits.org):
