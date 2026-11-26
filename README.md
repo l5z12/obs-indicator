@@ -39,6 +39,8 @@ To turn the overlay on and off while you play, set a key for **Toggle overlay in
   games (advanced)* in the settings: it raises the overlay into a higher window layer with
   [WindowTopMost](https://github.com/xmc0211/WindowTopMost). This injects a helper into Explorer (not the game), so
   it's off by default, and it can't help with the exclusive fullscreen above, which bypasses the desktop compositor.
+  The first time the helper starts after you sign in, focus may jump to the taskbar and back, or the Start menu may
+  open and close. Start OBS before the game so this doesn't interrupt it.
 - **You want the overlay in your recording.** Untick *Hide the overlay from screen capture* in the settings.
 - **The mic icon ignores push-to-talk.** It follows the mic's mute state only.
 - **Something else.** [Open an issue](https://github.com/l5z12/obs-indicator/issues/new/choose) and attach your
