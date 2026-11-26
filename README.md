@@ -35,7 +35,8 @@ To turn the overlay on and off while you play, set a key for **Toggle overlay in
 - **The overlay doesn't show over a game.** The game is probably using exclusive fullscreen, where its picture goes
   straight to the screen and no window can show over it. Switch the game to borderless or windowed fullscreen.
 - **Minecraft (or another OpenGL game) hides the overlay in fullscreen.** Tick *Draw inside OpenGL games* under *Show
-  the overlay over fullscreen games*. The overlay is then drawn into the game's own picture by a small helper loaded
+  the overlay over fullscreen games*. This is for Minecraft's OpenGL renderer (before 26.4, or with *Graphics API* set
+  to OpenGL); with its Vulkan renderer, *Show the overlay over fullscreen games* alone is enough. The overlay is then drawn into the game's own picture by a small helper loaded
   into the game, so it's off by default: don't use it with games that have anti-cheat. OBS's Game Capture still
   leaves the overlay out, but Display Capture and Window Capture record it.
 - **The game is borderless or windowed but still covers the overlay.** Some games present with flip-model or
