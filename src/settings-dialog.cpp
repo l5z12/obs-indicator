@@ -56,6 +56,27 @@ constexpr Choice kMicModes[] = {{"Settings.MicOff", L"Off"},
 				{"Settings.MicWhenMuted", L"Show when muted"},
 				{"Settings.MicAlways", L"Always show"}};
 
+// Z-order bands offered for "show over fullscreen games". `band` is the ZBID value passed to
+// WindowTopMost (see src/topmost.cpp); keep the set in sync with Settings::Clamp.
+//
+// Only these two are offered, and that is deliberate: win32kfull.sys classifies exactly three bands
+// as non-immersive (IsNonImmersiveBand -> ZBID_DESKTOP 1, ZBID_UIACCESS 2, ZBID_SYSTEM_TOOLS 16).
+// Every other band (the ZBID_IMMERSIVE_* set, GENUINE_WINDOWS, LOCK, ABOVELOCK_UX) is composed by
+// the shell in a separate tree, so an ordinary window placed there drops out of the desktop z-order
+// entirely - verified empirically (the window vanishes) and in the kernel's own band table. So of
+// the three desktop bands, DESKTOP (1) is just "no raising" and the two below are the only useful
+// choices. The labels describe the effect in plain words; the ZBID names stay out of the UI.
+struct BandChoice {
+	int band;              // ZBID_UIACCESS (2) or ZBID_SYSTEM_TOOLS (16)
+	const char *label_key; // combo-item text
+	const wchar_t *label_en;
+};
+constexpr BandChoice kFullscreenBands[] = {
+	{2, "Settings.BandUIAccess", L"Above everything, including Task Manager (recommended)"},
+	{16, "Settings.BandSystemTools", L"Above the game, below Task Manager"},
+};
+constexpr int kFullscreenBandCount = (int)(sizeof(kFullscreenBands) / sizeof(kFullscreenBands[0]));
+
 // Controls whose English text in obs-indicator.rc is replaced by a translation, if there is one.
 struct ControlText {
 	int id;
@@ -95,6 +116,8 @@ constexpr ControlText kControlTexts[] = {
 	{IDC_ACCENT_LABEL, "Settings.AccentColor"},
 	{IDC_ACCENT_PICK, "Settings.Choose"},
 	{IDC_HIDE_CAPTURE, "Settings.HideFromCapture"},
+	{IDC_SHOW_OVER_FULLSCREEN, "Settings.ShowOverFullscreen"},
+	{IDC_FS_BAND_LABEL, "Settings.Layer"},
 	{IDC_HOTKEY_HINT, "Settings.HotkeyTip"},
 	{IDC_PREVIEW, "Settings.Preview"},
 	{IDOK, "Settings.OK"},
@@ -229,18 +252,21 @@ void UpdateEnabled(HWND d)
 	const bool toast = en && Checked(d, IDC_TOAST_SHOW);
 	const bool mic_ind = ind && Selection(d, IDC_MIC_MODE) > 0;
 	const bool mic_toast = toast && Checked(d, IDC_N_MIC);
+	const bool fs_band = en && Checked(d, IDC_SHOW_OVER_FULLSCREEN);
 
 	auto enable = [d](std::initializer_list<int> ids, bool on) {
 		for (int id : ids)
 			EnableWindow(GetDlgItem(d, id), on);
 	};
 	enable({IDC_IND_SHOW, IDC_TOAST_SHOW, IDC_MONITOR, IDC_SCALE, IDC_SCALE_SPIN, IDC_OPACITY, IDC_OPACITY_SPIN,
-		IDC_MARGIN, IDC_MARGIN_SPIN, IDC_ACCENT_PICK, IDC_HIDE_CAPTURE, IDC_PREVIEW},
+		IDC_MARGIN, IDC_MARGIN_SPIN, IDC_ACCENT_PICK, IDC_HIDE_CAPTURE, IDC_SHOW_OVER_FULLSCREEN,
+		IDC_PREVIEW},
 	       en);
 	enable({IDC_IND_CORNER, IDC_IND_CORNER_LABEL, IDC_IND_LABEL_ICONS, IDC_IND_REC, IDC_IND_STREAM,
 		IDC_IND_REPLAY, IDC_IND_VCAM, IDC_IND_TIMER, IDC_MIC_LABEL, IDC_MIC_MODE},
 	       ind);
 	enable({IDC_MIC_SOURCE, IDC_MIC_SOURCE_LABEL}, mic_ind || mic_toast);
+	enable({IDC_FS_BAND, IDC_FS_BAND_LABEL}, fs_band);
 	enable({IDC_TOAST_CORNER, IDC_TOAST_CORNER_LABEL, IDC_TOAST_LABEL_ABOUT, IDC_N_REC, IDC_N_STREAM,
 		IDC_N_REPLAY, IDC_N_SHOT, IDC_N_VCAM, IDC_N_MIC, IDC_TOAST_LABEL_FOR, IDC_TOAST_SECS,
 		IDC_TOAST_SECS_SPIN, IDC_TOAST_LABEL_SECS},
@@ -336,6 +362,14 @@ void InitControls(HWND d, DlgState &st)
 	SetSpin(d, IDC_MARGIN_SPIN, 0, 400, s.margin);
 	SetAccent(d, st, s.accent);
 	Check(d, IDC_HIDE_CAPTURE, s.hide_from_capture);
+	Check(d, IDC_SHOW_OVER_FULLSCREEN, s.show_over_fullscreen);
+	int band_sel = 0;
+	for (int i = 0; i < kFullscreenBandCount; ++i) {
+		AddItem(d, IDC_FS_BAND, Tr(st, kFullscreenBands[i].label_key, kFullscreenBands[i].label_en).c_str());
+		if (kFullscreenBands[i].band == s.fullscreen_band)
+			band_sel = i;
+	}
+	Select(d, IDC_FS_BAND, band_sel);
 
 	UpdateEnabled(d);
 }
@@ -381,6 +415,12 @@ Settings ReadControls(HWND d, const DlgState &st)
 	s.margin = ReadInt(d, IDC_MARGIN, s.margin);
 	s.accent = st.accent;
 	s.hide_from_capture = Checked(d, IDC_HIDE_CAPTURE);
+	s.show_over_fullscreen = Checked(d, IDC_SHOW_OVER_FULLSCREEN);
+	{
+		int bi = Selection(d, IDC_FS_BAND);
+		if (bi >= 0 && bi < kFullscreenBandCount)
+			s.fullscreen_band = kFullscreenBands[bi].band;
+	}
 	s.Clamp();
 	return s;
 }
@@ -422,8 +462,15 @@ INT_PTR CALLBACK DlgProc(HWND d, UINT msg, WPARAM wp, LPARAM lp)
 			EndDialog(d, IDCANCEL);
 			return TRUE;
 		case IDC_PREVIEW:
-			if (st->ctx->preview)
-				st->ctx->preview(ReadControls(d, *st));
+			if (st->ctx->preview) {
+				// Preview is for the overlay's look, so it keeps the saved "show over fullscreen
+				// games" choice: turning that on injects a helper into Explorer.exe, which should
+				// only happen once the user clicks OK.
+				Settings p = ReadControls(d, *st);
+				p.show_over_fullscreen = st->original.show_over_fullscreen;
+				p.fullscreen_band = st->original.fullscreen_band;
+				st->ctx->preview(p);
+			}
 			return TRUE;
 		case IDC_ACCENT_PICK:
 			PickColor(d, *st);
@@ -432,6 +479,7 @@ INT_PTR CALLBACK DlgProc(HWND d, UINT msg, WPARAM wp, LPARAM lp)
 		case IDC_IND_SHOW:
 		case IDC_TOAST_SHOW:
 		case IDC_N_MIC:
+		case IDC_SHOW_OVER_FULLSCREEN:
 			if (code == BN_CLICKED)
 				UpdateEnabled(d);
 			return TRUE;

@@ -25,6 +25,8 @@ set(OBS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/obs-studio"
 set(OBS_INSTALL_DIR "$ENV{ProgramFiles}/obs-studio"
     CACHE PATH "Installed OBS Studio; obs.dll and obs-frontend-api.dll are read to create import libraries")
 option(OBS_INDICATOR_BUILD_TOOLS "Build the standalone preview/demo tools" ON)
+option(OBS_INDICATOR_WITH_FULLSCREEN_TOPMOST
+  "Build and bundle WindowTopMost for the optional 'show over fullscreen games' feature" ON)
 
 include(cmake/ObsSdk.cmake)
 
@@ -42,6 +44,8 @@ add_library(overlay-core STATIC
   src/renderer.hpp
   src/monitors.cpp
   src/monitors.hpp
+  src/topmost.cpp
+  src/topmost.hpp
   src/settings.hpp
   src/settings-dialog.cpp
   src/settings-dialog.hpp
@@ -61,6 +65,18 @@ target_compile_definitions(obs-indicator PRIVATE
 target_compile_options(obs-indicator PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${COMMON_OPTS}>)
 target_link_libraries(obs-indicator PRIVATE overlay-core OBS::libobs OBS::frontend-api)
 set_target_properties(obs-indicator PROPERTIES PREFIX "")
+
+# Optional: the WindowTopMost DLLs that let the overlay sit above fullscreen games. The plugin
+# loads WindowTopMost.dll by full path at runtime (no link- or compile-time dependency), so if
+# the DLLs are absent the feature simply stays unavailable.
+if(OBS_INDICATOR_WITH_FULLSCREEN_TOPMOST)
+  add_subdirectory(third_party/WindowTopMost)
+  add_dependencies(obs-indicator WindowTopMost)
+  # Stage the DLLs next to the plugin in the build tree so a plain `cmake --build` is runnable.
+  add_custom_command(TARGET obs-indicator POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:WindowTopMost>" "$<TARGET_FILE:IAMKeyHacker>" "$<TARGET_FILE_DIR:obs-indicator>")
+endif()
 
 if(OBS_INDICATOR_BUILD_TOOLS)
   # Renders the indicator/notification artwork to a PNG (no window, no OBS).
@@ -86,6 +102,15 @@ endif()
 install(TARGETS obs-indicator LIBRARY DESTINATION . RUNTIME DESTINATION .)
 install(FILES $<TARGET_PDB_FILE:obs-indicator> DESTINATION . OPTIONAL)
 install(DIRECTORY data/ DESTINATION data)
+
+# Bundle the WindowTopMost DLLs beside the plugin, plus their MIT licenses (as required).
+if(OBS_INDICATOR_WITH_FULLSCREEN_TOPMOST)
+  install(TARGETS WindowTopMost IAMKeyHacker LIBRARY DESTINATION . RUNTIME DESTINATION .)
+  install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/WindowTopMost/LICENSE"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/WindowTopMost/IAMKeyHacker/mHook_COPYING"
+    DESTINATION licenses/WindowTopMost)
+endif()
 
 # Plugin metadata shown in OBS's plugin manager (Tools > Plugin Manager), read from data/manifest.json.
 configure_file(cmake/manifest.json.in "${CMAKE_CURRENT_BINARY_DIR}/manifest.json" @ONLY)

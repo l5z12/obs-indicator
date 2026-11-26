@@ -8,7 +8,7 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 #define UPDOWN_STYLE UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS
 #define DROPDOWN_STYLE CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
 
-IDD_SETTINGS DIALOGEX 0, 0, 380, 337
+IDD_SETTINGS DIALOGEX 0, 0, 380, 367
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Overlay Indicator"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -49,7 +49,7 @@ BEGIN
     CONTROL         "", IDC_TOAST_SECS_SPIN, "msctls_updown32", UPDOWN_STYLE, 118, 184, 10, 12
     LTEXT           "seconds", IDC_TOAST_LABEL_SECS, 122, 186, 60, 8
 
-    GROUPBOX        "Appearance", IDC_GRP_APPEARANCE, 7, 207, 366, 81
+    GROUPBOX        "Appearance", IDC_GRP_APPEARANCE, 7, 207, 366, 111
     LTEXT           "Display:", IDC_MONITOR_LABEL, 15, 222, 64, 8
     COMBOBOX        IDC_MONITOR, 82, 219, 284, 120, DROPDOWN_STYLE
     LTEXT           "Size:", IDC_SCALE_LABEL, 15, 239, 64, 8
@@ -68,12 +68,15 @@ BEGIN
     LTEXT           "", IDC_ACCENT_SWATCH, 82, 254, 36, 12, WS_BORDER
     PUSHBUTTON      "&Choose...", IDC_ACCENT_PICK, 124, 253, 64, 14
     AUTOCHECKBOX    "&Hide the overlay from screen capture and recordings", IDC_HIDE_CAPTURE, 15, 272, 350, 10
+    AUTOCHECKBOX    "Show the overlay over &fullscreen games (advanced)", IDC_SHOW_OVER_FULLSCREEN, 15, 286, 350, 10
+    RTEXT           "Layer:", IDC_FS_BAND_LABEL, 28, 302, 40, 8
+    COMBOBOX        IDC_FS_BAND, 72, 300, 294, 120, DROPDOWN_STYLE
 
-    LTEXT           "Tip: bind ""Toggle overlay indicator"" in OBS Settings > Hotkeys.", IDC_HOTKEY_HINT, 10, 294, 360, 17
+    LTEXT           "Tip: bind ""Toggle overlay indicator"" in OBS Settings > Hotkeys.", IDC_HOTKEY_HINT, 10, 324, 360, 17
 
-    PUSHBUTTON      "&Preview", IDC_PREVIEW, 7, 316, 70, 14
-    DEFPUSHBUTTON   "OK", IDOK, 259, 316, 54, 14
-    PUSHBUTTON      "Cancel", IDCANCEL, 319, 316, 54, 14
+    PUSHBUTTON      "&Preview", IDC_PREVIEW, 7, 346, 70, 14
+    DEFPUSHBUTTON   "OK", IDOK, 259, 346, 54, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 319, 346, 54, 14
 END
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION PLUGIN_VERSION_RC
