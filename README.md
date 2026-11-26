@@ -28,6 +28,9 @@ Open **Tools → Overlay Indicator** to choose what shows, where, and how big. *
 To turn the overlay on and off while you play, set a key for **Toggle overlay indicator** in
 **Settings → Hotkeys**.
 
+The plugin uses OBS's language: English, 简体中文, 繁體中文, 日本語, 한국어, Deutsch, Français, Español,
+Português (Brasil) or Русский.
+
 ![The settings dialog](docs/settings.png)
 
 ## Troubleshooting

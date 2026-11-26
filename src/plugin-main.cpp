@@ -621,8 +621,12 @@ void OpenSettings(void *)
 	ctx.preview = [](const Settings &s) {
 		if (g_overlay) {
 			g_overlay->SetSettings(s);
-			g_overlay->Preview();
+			g_overlay->Preview(Utf8ToWide(Text("Toast.ReplaySaved", "Replay saved")));
 		}
+	};
+	ctx.text = [](const char *key) {
+		const char *out = nullptr;
+		return obs_module_get_string(key, &out) && out ? Utf8ToWide(out) : std::wstring();
 	};
 
 	Settings s = g_settings;

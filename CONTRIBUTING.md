@@ -29,6 +29,8 @@ No OBS installed? Run `.\scripts\fetch-obs-binaries.ps1 -Version 33.0.3` first, 
 - No compiler warnings, and OBS code style (tabs, 120 columns).
 - Commit messages and PR titles use [Conventional Commits](https://www.conventionalcommits.org):
   `fix: …`, `feat: …`, `docs: …`.
+- Text lives in `data/locale/` (one file per OBS language, `en-US.ini` is the source). After editing, run
+  `.\scripts\check-locales.ps1` and `build\overlay-demo.exe --dialog --check-layout --locale <file>`.
 
 ## Changelog
 

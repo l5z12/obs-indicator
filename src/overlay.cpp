@@ -276,6 +276,7 @@ struct Overlay::Impl {
 		Status status;
 		std::vector<Toast> toasts;
 		uint32_t preview_ms = 0;
+		std::wstring preview_title;
 	} pending;
 	std::atomic<HWND> ctrl{nullptr};
 	std::thread thread;
@@ -476,7 +477,7 @@ struct Overlay::Impl {
 		for (auto &t : p.toasts)
 			AddToast(t, now);
 		if (p.preview_ms)
-			StartPreview(p.preview_ms, now);
+			StartPreview(p.preview_ms, p.preview_title, now);
 		Update();
 	}
 
@@ -547,13 +548,13 @@ struct Overlay::Impl {
 		toasts_dirty = true;
 	}
 
-	void StartPreview(uint32_t ms, uint64_t now)
+	void StartPreview(uint32_t ms, const std::wstring &title, uint64_t now)
 	{
 		preview_start = now;
 		preview_until = now + ms;
 		Toast t;
 		t.content.icon = Icon::Saved;
-		t.content.title = L"Replay saved";
+		t.content.title = title;
 		t.content.subtitle = L"Replay 2026-01-01 12-00-00.mkv";
 		AddToast(t, now, true);
 		ind_signature.clear();
@@ -953,11 +954,12 @@ void Overlay::ShowToast(const Toast &toast)
 	impl_->Wake();
 }
 
-void Overlay::Preview(uint32_t duration_ms)
+void Overlay::Preview(std::wstring sample_title, uint32_t duration_ms)
 {
 	{
 		std::lock_guard lock(impl_->mtx);
 		impl_->pending.preview_ms = duration_ms;
+		impl_->pending.preview_title = std::move(sample_title);
 	}
 	impl_->Wake();
 }

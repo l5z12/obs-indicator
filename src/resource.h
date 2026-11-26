@@ -48,6 +48,17 @@
 #define IDC_PREVIEW 1070
 #define IDC_HOTKEY_HINT 1071
 
+// Labels and group boxes, given IDs so their text can be translated.
+#define IDC_GRP_INDICATOR 1080
+#define IDC_IND_HINT 1081
+#define IDC_GRP_TOAST 1082
+#define IDC_GRP_APPEARANCE 1083
+#define IDC_MONITOR_LABEL 1084
+#define IDC_SCALE_LABEL 1085
+#define IDC_OPACITY_LABEL 1086
+#define IDC_MARGIN_LABEL 1087
+#define IDC_ACCENT_LABEL 1088
+
 #ifndef IDC_STATIC
 #define IDC_STATIC -1
 #endif

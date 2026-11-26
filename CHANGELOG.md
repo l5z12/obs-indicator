@@ -23,3 +23,5 @@ A ShadowPlay-style on-screen overlay for OBS Studio on Windows.
 - The overlay is hidden from screen capture by default, click-through, never takes focus, and doesn't inject
   into games.
 - Installs in the OBS 33 plugin layout, with metadata for OBS's Plugin Manager.
+- Follows OBS's language: English, Simplified and Traditional Chinese, Japanese, Korean, German, French, Spanish,
+  Brazilian Portuguese and Russian.

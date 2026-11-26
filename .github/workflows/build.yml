@@ -27,6 +27,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Check translations
+        run: ./scripts/check-locales.ps1
+
       - name: Cache OBS headers and binaries
         uses: actions/cache@v6
         with:

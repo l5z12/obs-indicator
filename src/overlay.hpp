@@ -64,7 +64,7 @@ public:
 	void SetSettings(const Settings &settings);
 	void SetStatus(const Status &status);
 	void ShowToast(const Toast &toast); // dropped if the category is disabled
-	void Preview(uint32_t duration_ms = 6000);
+	void Preview(std::wstring sample_title = L"Replay saved", uint32_t duration_ms = 6000);
 
 private:
 	struct Impl;
