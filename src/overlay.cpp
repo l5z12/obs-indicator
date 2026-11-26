@@ -287,6 +287,7 @@ struct Overlay::Impl {
 	Renderer renderer;
 	LayeredWindow ind_win, toast_win;
 	TopMost topmost; // raises the windows above fullscreen games when enabled
+	int topmost_band = 0; // band last asked of `topmost` (0 = normal top-most), even if it failed
 	HWINEVENTHOOK fg_hook = nullptr;
 	Settings settings;
 	Status status;
@@ -362,6 +363,7 @@ struct Overlay::Impl {
 			return false;
 		}
 		ApplyAffinity();
+		ApplyTopMost(); // after a restart, settings from before are still here
 
 		fg_hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, ForegroundHook, 0,
 					  0, WINEVENT_OUTOFCONTEXT);
@@ -376,6 +378,7 @@ struct Overlay::Impl {
 			fg_hook = nullptr;
 		}
 		topmost.Release();
+		topmost_band = 0;
 		ind_win.Destroy();
 		toast_win.Destroy();
 		if (HWND c = ctrl.exchange(nullptr))
@@ -488,28 +491,40 @@ struct Overlay::Impl {
 	{
 		s.Clamp();
 		const bool affinity_changed = s.hide_from_capture != settings.hide_from_capture;
-		const bool topmost_changed = s.show_over_fullscreen != settings.show_over_fullscreen ||
-					     (s.show_over_fullscreen && s.fullscreen_band != settings.fullscreen_band);
 		settings = std::move(s);
 		specific_mon_valid = false;
 		if (affinity_changed)
 			ApplyAffinity();
-		if (topmost_changed)
-			ApplyTopMost();
+		ApplyTopMost();
 		if (!settings.enabled || !settings.notifications)
 			toasts.clear();
 		ind_signature.clear();
 		toasts_dirty = true;
 	}
 
+	// The z-order band the overlay windows should be in, or 0 for normal top-most. The Explorer
+	// helper is only started while the overlay is enabled: the settings dialog greys the option
+	// out otherwise. Once it runs, it stays when the overlay is turned off (for example with the
+	// toggle hotkey mid-game), so toggling doesn't inject and remove it every time.
+	int WantedBand() const
+	{
+		if (!settings.show_over_fullscreen || (!settings.enabled && topmost_band == 0))
+			return 0;
+		return settings.fullscreen_band;
+	}
+
 	// Raise the overlay windows into a high z-order band so they show over fullscreen games, or
 	// drop them back when the option is turned off. The first raise injects a helper into
 	// Explorer.exe (via WindowTopMost), so it only runs when the user opts in, and turning the
-	// option off removes the helper again.
+	// option off removes the helper again. Does nothing unless the wanted band changed.
 	void ApplyTopMost()
 	{
-		if (settings.show_over_fullscreen) {
-			const auto band = (unsigned long)settings.fullscreen_band;
+		const int wanted = WantedBand();
+		if (wanted == topmost_band)
+			return;
+		topmost_band = wanted;
+		if (wanted) {
+			const auto band = (unsigned long)wanted;
 			const bool a = topmost.Raise(inst, ind_win.hwnd, band);
 			const bool b = topmost.Raise(inst, toast_win.hwnd, band);
 			if (a && b)
