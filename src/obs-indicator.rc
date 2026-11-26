@@ -69,7 +69,7 @@ BEGIN
     PUSHBUTTON      "&Choose...", IDC_ACCENT_PICK, 124, 253, 64, 14
     AUTOCHECKBOX    "&Hide the overlay from screen capture and recordings", IDC_HIDE_CAPTURE, 15, 272, 350, 10
     AUTOCHECKBOX    "Show the overlay over &fullscreen games (advanced)", IDC_SHOW_OVER_FULLSCREEN, 15, 286, 350, 10
-    RTEXT           "Layer:", IDC_FS_BAND_LABEL, 28, 302, 40, 8
+    LTEXT           "Layer:", IDC_FS_BAND_LABEL, 28, 302, 40, 8
     COMBOBOX        IDC_FS_BAND, 72, 300, 294, 120, DROPDOWN_STYLE
     AUTOCHECKBOX    "&Draw inside OpenGL games such as Minecraft (injects into the game)", IDC_DRAW_IN_GAMES, 28, 316, 338, 10
 
