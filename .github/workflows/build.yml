@@ -44,6 +44,18 @@ jobs:
       - name: Build and package
         run: ./scripts/build.ps1 -Config RelWithDebInfo -ObsDir "deps/obs-$env:OBS_VERSION" -Package -WarningsAsErrors
 
+      # A fresh install and then an update from the zip, in Windows PowerShell like most users run install.ps1.
+      - name: Test install.ps1
+        shell: powershell
+        run: |
+          $zip = Get-ChildItem build/dist -Filter *-windows-x64.zip | Select-Object -First 1
+          $dir = Join-Path $env:RUNNER_TEMP 'plugins\obs-indicator'
+          ./install.ps1 -Zip $zip.FullName -Destination $dir
+          ./install.ps1 -Zip $zip.FullName -Destination $dir
+          if (-not (Test-Path "$dir\obs-indicator-hook.dll") -or (Test-Path "$dir.old") -or (Test-Path "$dir.new")) {
+            throw 'install.ps1 left the plugin folder incomplete'
+          }
+
       - uses: actions/upload-artifact@v7
         with:
           name: obs-indicator-windows-x64
@@ -165,7 +177,15 @@ jobs:
 
           ### Install
 
-          1. Close OBS Studio (33 or newer, 64-bit Windows).
+          You need 64-bit OBS Studio 33 or newer on Windows. In PowerShell, run:
+
+          ```powershell
+          irm https://raw.githubusercontent.com/l5z12/obs-indicator/main/install.ps1 | iex
+          ```
+
+          Or install by hand:
+
+          1. Close OBS.
           2. Extract `obs-indicator-*-windows-x64.zip` into `C:\ProgramData\obs-studio\plugins\`, so that you get
              `C:\ProgramData\obs-studio\plugins\obs-indicator\obs-indicator.dll`.
           3. Start OBS and open **Tools → Overlay Indicator**.

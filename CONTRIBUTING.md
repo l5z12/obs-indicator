@@ -24,6 +24,8 @@ No OBS installed? Run `.\scripts\fetch-obs-binaries.ps1 -Version 33.0.3` first, 
 - `src/game-hook.cpp`, `src/hook/gl-hook.cpp`: *Draw inside OpenGL games*, which loads a hook into fullscreen OpenGL
   games to draw the overlay in their frames
 - `tools/`: demo and preview programs that run without OBS
+- `install.ps1`: the one-line installer in the README. It runs from `main` for everyone, so keep it working in
+  Windows PowerShell 5.1 and ASCII-only
 
 ## Rules
 
