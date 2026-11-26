@@ -73,57 +73,76 @@ constexpr GLenum kBGRA = 0x80E1, kClampToEdge = 0x812F, kTexture0 = 0x84C0, kAct
 
 // --- shared memory and status reporting ----------------------------------------------------
 HANDLE g_map = nullptr;
-Header *g_hdr = nullptr;
+Header *g_hdr = nullptr; // set under g_msg_lock
 HANDLE g_owner = nullptr;
 DWORD g_owner_pid = 0;
 ULONGLONG g_next_connect = 0;
-char g_msg[sizeof(Header::hook_msg)] = {};
-bool g_msg_pending = false;
+// Status lines not yet delivered (the shared memory isn't open yet), oldest first.
+char g_pending[kHookMessages][sizeof(HookMessage::text)] = {};
+int g_pending_count = 0;
 SRWLOCK g_msg_lock = SRWLOCK_INIT; // Report() runs on the install thread and the render thread
 
-void FlushMessage()
+void FlushMessagesLocked()
 {
-	AcquireSRWLockExclusive(&g_msg_lock);
-	if (g_hdr && g_msg_pending) {
-		memcpy(g_hdr->hook_msg, g_msg, sizeof(g_msg));
-		g_hdr->hook_pid = GetCurrentProcessId();
+	if (!g_hdr || g_hdr->magic != kMagic || g_hdr->version != kVersion)
+		return;
+	for (int i = 0; i < g_pending_count; ++i) {
+		HookMessage &m = g_hdr->hook_msgs[(ULONG)g_hdr->hook_msg_seq % kHookMessages];
+		m.pid = GetCurrentProcessId();
+		memcpy(m.text, g_pending[i], sizeof(m.text));
 		InterlockedIncrement(&g_hdr->hook_msg_seq);
-		g_msg_pending = false;
 	}
-	ReleaseSRWLockExclusive(&g_msg_lock);
+	g_pending_count = 0;
 }
 
 // A status line for OBS's log; delivered as soon as the plugin's shared memory is open.
 void Report(const char *fmt, ...)
 {
 	AcquireSRWLockExclusive(&g_msg_lock);
+	if (g_pending_count == kHookMessages) { // keep the newest
+		memmove(g_pending[0], g_pending[1], sizeof(g_pending) - sizeof(g_pending[0]));
+		--g_pending_count;
+	}
 	va_list ap;
 	va_start(ap, fmt);
-	vsnprintf(g_msg, sizeof(g_msg), fmt, ap);
+	vsnprintf(g_pending[g_pending_count++], sizeof(g_pending[0]), fmt, ap);
 	va_end(ap);
-	g_msg_pending = true;
+	FlushMessagesLocked();
 	ReleaseSRWLockExclusive(&g_msg_lock);
-	FlushMessage();
+}
+
+// Opens the plugin's shared memory if it exists. Retried at most every 2 s.
+bool OpenShared()
+{
+	const ULONGLONG now = GetTickCount64();
+	if (now < g_next_connect)
+		return false;
+	g_next_connect = now + 2000;
+	HANDLE map = OpenFileMappingW(FILE_MAP_READ | FILE_MAP_WRITE, FALSE, kMappingName);
+	if (!map)
+		return false;
+	auto *hdr = static_cast<Header *>(MapViewOfFile(map, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, kMappingSize));
+	if (!hdr) {
+		CloseHandle(map);
+		return false;
+	}
+	AcquireSRWLockExclusive(&g_msg_lock);
+	g_map = map;
+	g_hdr = hdr;
+	FlushMessagesLocked();
+	ReleaseSRWLockExclusive(&g_msg_lock);
+	return true;
 }
 
 // True while an OBS with the option on owns the shared memory. Cheap enough to run every frame.
 bool Connect()
 {
-	if (!g_hdr) {
-		const ULONGLONG now = GetTickCount64();
-		if (now < g_next_connect)
-			return false;
-		g_next_connect = now + 2000;
-		g_map = OpenFileMappingW(FILE_MAP_READ | FILE_MAP_WRITE, FALSE, kMappingName);
-		if (!g_map)
-			return false;
-		g_hdr = static_cast<Header *>(MapViewOfFile(g_map, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, kMappingSize));
-		if (!g_hdr) {
-			CloseHandle(g_map);
-			g_map = nullptr;
-			return false;
-		}
-		FlushMessage();
+	if (!g_hdr && !OpenShared())
+		return false;
+	if (g_pending_count) { // written before an OBS of this version owned the memory
+		AcquireSRWLockExclusive(&g_msg_lock);
+		FlushMessagesLocked();
+		ReleaseSRWLockExclusive(&g_msg_lock);
 	}
 	if (g_hdr->magic != kMagic || g_hdr->version != kVersion || !(g_hdr->flags & kFlagEnabled))
 		return false;
@@ -484,6 +503,9 @@ HMODULE FindIcd()
 
 DWORD WINAPI InstallThread(void *)
 {
+	// Open the shared memory first, so what we report below reaches OBS's log. The render
+	// thread only touches it once the hook is in.
+	OpenShared();
 	// The game already renders with OpenGL when the plugin injects us, so the driver is loaded;
 	// wait a little in case it isn't yet.
 	HMODULE icd = nullptr;

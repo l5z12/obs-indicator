@@ -87,7 +87,8 @@ GameHook::~GameHook()
 		CloseHandle(map_);
 	for (const auto *list : {&hooked_, &skipped_})
 		for (const Known &k : *list)
-			CloseHandle(k.process);
+			if (k.process)
+				CloseHandle(k.process);
 }
 
 bool GameHook::Open()
@@ -140,7 +141,8 @@ void GameHook::SetEnabled(HMODULE module, bool on)
 		Hide(1);
 		// Look at those again next time: the reason may have gone.
 		for (const Known &k : skipped_)
-			CloseHandle(k.process);
+			if (k.process)
+				CloseHandle(k.process);
 		skipped_.clear();
 	}
 	enabled_ = on;
@@ -200,8 +202,13 @@ bool GameHook::DrawnInGame(int layer) const
 
 bool GameHook::Has(std::vector<Known> &list, DWORD pid)
 {
-	// Forget processes that have exited, so a reused pid is looked at afresh.
+	// Forget processes that have exited, so a reused pid is looked at afresh. Without a process
+	// handle, the process counts as gone once its window is.
 	std::erase_if(list, [](const Known &k) {
+		if (!k.process) {
+			DWORD owner = 0;
+			return !IsWindow(k.hwnd) || !GetWindowThreadProcessId(k.hwnd, &owner) || owner != k.pid;
+		}
 		if (WaitForSingleObject(k.process, 0) == WAIT_TIMEOUT)
 			return false;
 		CloseHandle(k.process);
@@ -216,12 +223,14 @@ void GameHook::Poll()
 		return;
 	Header *h = Hdr(view_);
 	const LONG seq = h->hook_msg_seq;
-	if (seq != last_msg_seq_) {
-		last_msg_seq_ = seq;
-		char msg[sizeof(h->hook_msg) + 1];
-		memcpy(msg, h->hook_msg, sizeof(h->hook_msg));
-		msg[sizeof(h->hook_msg)] = '\0';
-		log_(false, "Draw inside OpenGL games (pid %u): %s", h->hook_pid, msg);
+	if (seq - last_msg_seq_ > kHookMessages) // more than the ring holds: the oldest are gone
+		last_msg_seq_ = seq - kHookMessages;
+	for (; last_msg_seq_ < seq; ++last_msg_seq_) {
+		const HookMessage &m = h->hook_msgs[(ULONG)last_msg_seq_ % kHookMessages];
+		char text[sizeof(m.text) + 1];
+		memcpy(text, m.text, sizeof(m.text));
+		text[sizeof(m.text)] = '\0';
+		log_(false, "Draw inside OpenGL games (pid %u): %s", m.pid, text);
 	}
 
 	HWND fg = GetForegroundWindow();
@@ -235,24 +244,26 @@ void GameHook::Poll()
 	if (Has(hooked_, pid) || Has(skipped_, pid))
 		return;
 	if (CoversMonitor(fg)) // not fullscreen (yet): look again later
-		Inject(pid);
+		Inject(fg, pid);
 }
 
-void GameHook::Inject(DWORD pid)
+void GameHook::Inject(HWND hwnd, DWORD pid)
 {
 	HANDLE p = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION |
 				       PROCESS_VM_WRITE | PROCESS_VM_READ | SYNCHRONIZE,
 			       FALSE, pid);
 	if (!p) {
-		// Most likely elevated or protected. Remember it so we don't try every 100 ms.
-		const DWORD err = GetLastError();
-		if (HANDLE s = OpenProcess(SYNCHRONIZE, FALSE, pid))
-			skipped_.push_back({pid, s});
-		if (err == ERROR_ACCESS_DENIED)
+		// Remember it, so we don't try (and log) again every 100 ms. A process whose name we can't
+		// even read is part of Windows: DWM briefly covers the screen while a game switches to
+		// exclusive fullscreen. One we can name is usually running as administrator, or protected.
+		skipped_.push_back({pid, OpenProcess(SYNCHRONIZE, FALSE, pid), hwnd});
+		if (HANDLE q = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid)) {
 			log_(false,
-			     "Draw inside OpenGL games: can't look into fullscreen process %lu (access denied). "
-			     "If it's a game running as administrator, OBS has to run as administrator too",
-			     pid);
+			     "Draw inside OpenGL games: can't load into %s (pid %lu, access denied). If it runs as "
+			     "administrator, OBS has to as well",
+			     ExeName(q).c_str(), pid);
+			CloseHandle(q);
+		}
 		return;
 	}
 	const std::string exe = ExeName(p);
@@ -263,11 +274,11 @@ void GameHook::Inject(DWORD pid)
 	if (!opengl || wow64) {
 		if (opengl)
 			log_(false, "Draw inside OpenGL games: %s is a 32-bit game, which isn't supported", exe.c_str());
-		skipped_.push_back({pid, p}); // not an OpenGL game: nothing to do
+		skipped_.push_back({pid, p, hwnd}); // not an OpenGL game: nothing to do
 		return;
 	}
 	if (already) {
-		hooked_.push_back({pid, p});
+		hooked_.push_back({pid, p, hwnd});
 		log_(false, "Draw inside OpenGL games: %s (pid %lu) still has the hook from before", exe.c_str(), pid);
 		return;
 	}
@@ -294,10 +305,10 @@ void GameHook::Inject(DWORD pid)
 		log_(true, "Draw inside OpenGL games: couldn't load the hook into %s (pid %lu): %s (error %lu)", exe.c_str(),
 		     pid, !t ? "can't start a thread in it" : wait != WAIT_OBJECT_0 ? "timed out" : "LoadLibrary failed",
 		     err);
-		skipped_.push_back({pid, p});
+		skipped_.push_back({pid, p, hwnd});
 		return;
 	}
-	hooked_.push_back({pid, p});
+	hooked_.push_back({pid, p, hwnd});
 	log_(false, "Draw inside OpenGL games: loaded the hook into %s (pid %lu)", exe.c_str(), pid);
 }
 

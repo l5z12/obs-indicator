@@ -15,7 +15,7 @@ namespace indicator::shared {
 
 constexpr wchar_t kMappingName[] = L"Local\\obs-indicator-game-overlay";
 constexpr uint32_t kMagic = 0x4949424F; // "OBII"
-constexpr uint32_t kVersion = 1;
+constexpr uint32_t kVersion = 2;
 
 constexpr int kLayers = 2;                     // the status indicator and the notifications
 constexpr uint32_t kMaxLayerBytes = 32u << 20; // 32 MiB: up to 4096 x 2048 BGRA pixels
@@ -35,17 +35,23 @@ struct Layer {
 	uint32_t reserved[6];
 };
 
+// A status line from a hook for OBS's log.
+struct HookMessage {
+	uint32_t pid;
+	char text[124]; // UTF-8, NUL-terminated
+};
+constexpr int kHookMessages = 8;
+
 struct Header {
 	uint32_t magic;
 	uint32_t version;
 	uint32_t owner_pid; // the OBS process; the hook stops drawing once it has exited
 	volatile LONG flags;
 	Layer layers[kLayers];
-	// The hook's latest status line for OBS's log (UTF-8). The hook bumps hook_msg_seq after
-	// writing it, and owns both fields.
+	// The hooks' latest status lines, a ring: a hook writes hook_msgs[hook_msg_seq %
+	// kHookMessages], then increments hook_msg_seq. The plugin logs the ones it hasn't seen.
 	volatile LONG hook_msg_seq;
-	uint32_t hook_pid;
-	char hook_msg[248];
+	HookMessage hook_msgs[kHookMessages];
 };
 
 // Layer i's pixels: top-down, premultiplied BGRA, w * 4 bytes per row.

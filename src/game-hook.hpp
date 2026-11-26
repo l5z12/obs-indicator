@@ -46,11 +46,12 @@ public:
 private:
 	struct Known {
 		DWORD pid;
-		HANDLE process; // SYNCHRONIZE, to notice the exit (and pid reuse)
+		HANDLE process; // SYNCHRONIZE, to notice the exit (and pid reuse); may be null
+		HWND hwnd;      // its fullscreen window; stands in for the process when that is null
 	};
 
 	bool Open();
-	void Inject(DWORD pid);
+	void Inject(HWND hwnd, DWORD pid);
 	static bool Has(std::vector<Known> &list, DWORD pid);
 
 	LogFn log_;
