@@ -78,8 +78,8 @@ struct Settings {
 			mic_mode = MicMode::Off;
 		// win32k treats only ZBID_DESKTOP (1), ZBID_UIACCESS (2) and ZBID_SYSTEM_TOOLS (16) as
 		// non-immersive; a plain window placed in any other band drops out of the desktop z-order.
-		// Of those three, 1 is "no raising", so only 2 and 16 are offered. Anything else (including
-		// values saved by older builds that listed more bands) falls back to UIAccess (2, the top).
+		// Of those three, 1 is "no raising", so only 2 and 16 are offered. Any other saved value
+		// (a hand-edited config, say) falls back to UIAccess (2, the top).
 		if (fullscreen_band != 2 && fullscreen_band != 16)
 			fullscreen_band = 2;
 	}
