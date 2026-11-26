@@ -42,12 +42,14 @@ struct tag_IAMControllerWindow {
     IAMWorkerResponse Response;
     ThreadStopHandler ThreadStop;
     HANDLE hWindowCreateEvent;
+    HANDLE hThread; // obs-indicator patch: kept so WTMUninit can wait for the thread to exit
 
-    tag_IAMControllerWindow() : hWnd(NULL), bIsReady(FALSE), Response(), hWindowCreateEvent(NULL) {}
+    tag_IAMControllerWindow() : hWnd(NULL), bIsReady(FALSE), Response(), hWindowCreateEvent(NULL), hThread(NULL) {}
     void Reset() {
         hWnd = NULL;
         bIsReady = FALSE;
         hWindowCreateEvent = NULL;
+        hThread = NULL;
         Response = IAMWorkerResponse();
     }
 } IAMControllerWindow;
@@ -473,6 +475,7 @@ BOOL WTMAPI WTMInit() {
 
     // Create IAMController window and wait (use mutex)
     HANDLE hWindowLoopThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)WTMControllerWindowThread, NULL, NULL, 0);
+    IAMControllerWindow.hThread = hWindowLoopThread;
     if (!hWindowLoopThread) {
         DEBUGERR("WTMInit: Can not create IAMController window");
         SetLastError(ERROR_WTM_COMMUNICATION_MESSAGING);
@@ -543,37 +546,45 @@ BOOL WTMAPI WTMInit() {
     return TRUE;
 }
 
-// WindowTopMost uninstallation function. You must call it in your program. 
-_Success_(return == TRUE)
-BOOL WTMAPI WTMUninit() {
-    // Uninstall IAMWorker From Explorer.EXE to close the background program
-
-    // If already uninstalled, do not uninstall again
-    if (!WTMCheckForDll()) {
-        return TRUE;
-    }
-
-    // Unload IAMWorker
-    if (!WTMUnloadWorker()) {
-        return FALSE;
-    }
-
-    // Close IAMController window
-    LRESULT nRes = SendMessage(IAMControllerWindow.hWnd, WM_CLOSE, 0, 0);
-    if (nRes != ERROR_SUCCESS) {
-        DEBUGERR("WTMUninit: Can not send close message to IAMController window.");
-        SetLastError(nRes);
-        return FALSE;
-    }
-
-    // Uninit controller window
-    if (IAMControllerWindow.ThreadStop.StopAllThread() != TSH_SUCCESS) {
-        DEBUGERR("WTMUninit: Can not stop threads.");
-        SetLastError(ERROR_WTM_COMMUNICATION_MESSAGING);
-        return FALSE;
+// obs-indicator patch: close the IAMController window and wait until its thread has fully exited
+// (on the thread handle, so no code from this DLL is still running afterwards). Returns FALSE if
+// the thread did not stop in time.
+static BOOL WTMStopController() {
+    if (IAMControllerWindow.hThread != NULL) {
+        if (IAMControllerWindow.hWnd != NULL) {
+            PostMessage(IAMControllerWindow.hWnd, WM_CLOSE, 0, 0);
+        }
+        if (WaitForSingleObject(IAMControllerWindow.hThread, WAIT_THREAD_STOP_TIMEOUT) != WAIT_OBJECT_0) {
+            DEBUGERR("WTMStopController: IAMController thread did not stop.");
+            return FALSE;
+        }
+        CloseHandle(IAMControllerWindow.hThread);
     }
     IAMControllerWindow.ThreadStop.Uninit();
     IAMControllerWindow.Reset();
+    return TRUE;
+}
+
+// WindowTopMost uninstallation function. You must call it in your program.
+// obs-indicator patch: always stop the IAMController thread, even when IAMWorker is no longer in
+// Explorer.EXE (for example after Explorer restarted). Upstream returned early in that case and
+// left the thread running, so unloading this DLL afterwards crashed the host. Also safe to call
+// after a failed WTMInit. Returns FALSE if anything could not be cleaned up; the caller must then
+// keep this DLL loaded, because its thread may still be running.
+_Success_(return == TRUE)
+BOOL WTMAPI WTMUninit() {
+    // Uninstall IAMWorker From Explorer.EXE to close the background program (no-op if it is gone)
+    BOOL bWorkerUnloaded = WTMUnloadWorker();
+
+    // Close IAMController window and wait for its thread
+    if (!WTMStopController()) {
+        SetLastError(ERROR_WTM_COMMUNICATION_MESSAGING);
+        return FALSE;
+    }
+    if (!bWorkerUnloaded) {
+        SetLastError(ERROR_WTM_WORKER_CONTROL);
+        return FALSE;
+    }
 
     DEBUGLOG("WTMUninit: Success");
 

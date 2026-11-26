@@ -35,6 +35,7 @@ public:
 
 private:
 	bool EnsureInit(HMODULE module);
+	void UninitAndUnload();
 
 	HMODULE dll_ = nullptr;
 	void *init_ = nullptr;     // WTMInit

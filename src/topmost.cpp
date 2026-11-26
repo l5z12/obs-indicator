@@ -64,9 +64,7 @@ bool TopMost::EnsureInit(HMODULE module)
 	}
 
 	if (!reinterpret_cast<WTMInitFn>(init_)()) {
-		reinterpret_cast<WTMUninitFn>(uninit_)();
-		FreeLibrary(dll_);
-		dll_ = nullptr;
+		UninitAndUnload();
 		return false;
 	}
 
@@ -91,13 +89,20 @@ void TopMost::Lower(HWND hwnd)
 	reinterpret_cast<WTMSetWindowBandFn>(set_band_)(hwnd, nullptr, kBandDesktop);
 }
 
+void TopMost::UninitAndUnload()
+{
+	// WTMUninit removes the Explorer helper and stops WindowTopMost's own thread. If it reports a
+	// failure, that thread may still be running code from the DLL, so the DLL stays loaded (until
+	// OBS exits) rather than being unloaded under it.
+	if (reinterpret_cast<WTMUninitFn>(uninit_)())
+		FreeLibrary(dll_);
+	dll_ = nullptr;
+}
+
 void TopMost::Shutdown()
 {
-	if (dll_) {
-		if (init_done_ && uninit_)
-			reinterpret_cast<WTMUninitFn>(uninit_)();
-		FreeLibrary(dll_);
-	}
+	if (dll_)
+		UninitAndUnload();
 	dll_ = nullptr;
 	init_ = uninit_ = set_band_ = nullptr;
 	init_done_ = false;
