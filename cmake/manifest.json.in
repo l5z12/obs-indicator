@@ -1,0 +1,13 @@
+{
+  "display_name": "Overlay Indicator",
+  "id": "obs-indicator",
+  "name": "obs-indicator",
+  "version": "@PROJECT_VERSION@",
+  "description": "@PROJECT_DESCRIPTION@",
+  "urls": {
+    "repository": "@PROJECT_HOMEPAGE_URL@",
+    "support": "@PROJECT_HOMEPAGE_URL@/issues"
+  },
+  "has_banner": false,
+  "has_icon": false
+}

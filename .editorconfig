@@ -1,0 +1,25 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# OBS Studio style: tabs shown 8 wide, lines up to 120 columns.
+[*.{c,cpp,h,hpp}]
+indent_style = tab
+tab_width = 8
+indent_size = 8
+max_line_length = 120
+
+[*.{rc,ps1}]
+indent_style = space
+indent_size = 4
+
+[{CMakeLists.txt,*.cmake,*.in,*.json,*.toml,*.yml,*.manifest}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

@@ -1,0 +1,53 @@
+# Release configuration for Knope (https://knope.tech). CONTRIBUTING.md explains the release process.
+
+[package]
+versioned_files = [
+  # The version lives in the project() call; CMake passes it on to the DLL and manifest.json.
+  { path = "CMakeLists.txt", regex = 'project\(obs-indicator VERSION (?<version>\d+\.\d+\.\d+)' },
+]
+changelog = "CHANGELOG.md"
+
+[changes]
+# Only change files in .changeset/ go into the changelog and decide the version; commit messages are ignored.
+ignore_conventional_commits = true
+
+# `knope document-change`: asks for the change type and a summary, then writes a change file to .changeset/.
+[[workflows]]
+name = "document-change"
+
+[[workflows.steps]]
+type = "CreateChangeFile"
+
+# Run by CI on main while there are change files: bumps the version, writes CHANGELOG.md, deletes the change
+# files, and force-pushes all that to the `release` branch with a pull request into main.
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "Command"
+command = "git switch -C release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = "git commit -m \"Release obs-indicator $version\""
+
+[[workflows.steps]]
+type = "Command"
+command = "git push --force --set-upstream origin release"
+
+[[workflows.steps]]
+type = "CreatePullRequest"
+base = "main"
+
+[workflows.steps.title]
+template = "Release obs-indicator $version"
+
+[workflows.steps.body]
+template = "Merging this pull request releases obs-indicator $version. CI then tags it and publishes a GitHub release with the plugin zips.\n\n$changelog"
+
+[github]
+owner = "l5z12"
+repo = "obs-indicator"

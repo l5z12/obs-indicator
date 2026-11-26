@@ -1,0 +1,17 @@
+name: Feature request
+description: Suggest an improvement or a new notification
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: The situation or problem, rather than a specific solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How could the plugin help?
+      description: What you'd like to see or set. A mock-up or a screenshot from another tool is welcome.

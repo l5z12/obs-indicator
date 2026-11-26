@@ -1,0 +1,81 @@
+name: Bug report
+description: Something doesn't work, or the overlay looks wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. If the overlay is missing over a particular game, please check
+        the **Limitations** section of the README first: games in legacy exclusive fullscreen can't be overlaid
+        without injecting into them, which this plugin deliberately doesn't do.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you expected to see, and what you saw instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start the replay buffer
+        2. Press the save hotkey
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: Shown in OBS under Tools > Plugin Manager, or in the release name.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: obs-version
+    attributes:
+      label: OBS Studio version
+      placeholder: "33.0.3"
+    validations:
+      required: true
+
+  - type: input
+    id: windows-version
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 25H2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: display-mode
+    attributes:
+      label: If it's about a game, how does the game run?
+      options:
+        - Not about a game
+        - Windowed
+        - Borderless / fullscreen windowed
+        - Fullscreen
+        - Not sure
+
+  - type: input
+    id: log
+    attributes:
+      label: OBS log
+      description: >
+        In OBS, choose Help > Log Files > Upload Current Log File and paste the URL here. Lines starting with
+        `[obs-indicator]` are the most useful.
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or anything else
+      description: >
+        The overlay is hidden from screen capture by default. To screenshot it, first untick "Hide the overlay from
+        screen capture" in Tools > Overlay Indicator.

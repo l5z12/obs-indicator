@@ -1,0 +1,159 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The OBS release the plugin is built against (its headers and DLLs). When updating, change both values; see
+  # CONTRIBUTING.md for how to get the zip's digest.
+  OBS_VERSION: 33.0.3
+  OBS_SHA256: 18a68c325adbda6f6082d5281021a8d1e35a6432842800618e8690b71925c107
+  KNOPE_VERSION: 0.24.0
+
+jobs:
+  build:
+    name: Windows x64
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache OBS headers and binaries
+        uses: actions/cache@v6
+        with:
+          path: |
+            deps/obs-studio
+            deps/obs-${{ env.OBS_VERSION }}
+          key: obs-${{ env.OBS_VERSION }}-${{ hashFiles('scripts/fetch-obs-*.ps1') }}
+
+      - name: Fetch OBS ${{ env.OBS_VERSION }}
+        run: ./scripts/fetch-obs-binaries.ps1 -Version $env:OBS_VERSION -Sha256 $env:OBS_SHA256
+
+      - name: Build and package
+        run: ./scripts/build.ps1 -Config RelWithDebInfo -ObsDir "deps/obs-$env:OBS_VERSION" -Package -WarningsAsErrors
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: obs-indicator-windows-x64
+          path: build/dist/*.zip
+          if-no-files-found: error
+
+  # While change files are waiting in .changeset/, keep a "Release obs-indicator x.y.z" pull request up to date.
+  # It bumps the version in CMakeLists.txt, adds the changelog section and deletes the change files.
+  release-pr:
+    name: Release pull request
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # push the `release` branch
+      pull-requests: write  # open or update the pull request
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # Knope reads the last version tag
+
+      - name: Look for change files
+        id: changes
+        run: |
+          count=0
+          if [ -d .changeset ]; then count=$(find .changeset -maxdepth 1 -name '*.md' | wc -l); fi
+          echo "Change files waiting to be released: $count"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - uses: knope-dev/action@19617851f9f13ab2f27a05989c55efb18aca3675  # v2.1.2
+        if: steps.changes.outputs.count != '0'
+        with:
+          version: ${{ env.KNOPE_VERSION }}
+
+      - name: Open or update the release pull request
+        if: steps.changes.outputs.count != '0'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          knope prepare-release --verbose
+
+  # Publishes a GitHub release when a push to main changes the version (the release pull request was merged), or
+  # when the workflow is run by hand for a version that has no tag yet.
+  release:
+    name: Release
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # create the tag and the release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # tags, and the previous commit to compare versions with
+
+      - name: Check whether to release
+        id: state
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          read_version() { sed -n 's/^project(obs-indicator VERSION \([0-9.]*\).*/\1/p'; }
+          version=$(read_version < CMakeLists.txt)
+          previous=""  # stays empty for a new branch or an unknown previous commit
+          if [[ -n "$BEFORE" && ! "$BEFORE" =~ ^0+$ ]]; then
+            previous=$( (git show "$BEFORE:CMakeLists.txt" 2> /dev/null || true) | read_version)
+          fi
+          if git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then
+            release=false; reason="v$version is already tagged"
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            release=true; reason="run by hand"
+          elif [[ -n "$previous" && "$previous" != "$version" ]]; then
+            release=true; reason="this push changed the version from $previous"
+          else
+            release=false; reason="this push didn't change the version"
+          fi
+          echo "Version $version: release=$release ($reason)"
+          {
+            echo "version=$version"
+            echo "release=$release"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v8
+        if: steps.state.outputs.release == 'true'
+        with:
+          name: obs-indicator-windows-x64
+          path: dist
+
+      - name: Publish the GitHub release
+        if: steps.state.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.state.outputs.version }}
+        run: |
+          {
+            # This version's section of CHANGELOG.md, without its "## x.y.z (date)" heading.
+            awk -v v="$VERSION" '
+              $0 == "## " v || index($0, "## " v " ") == 1 { f = 1; next }
+              f && /^## / { exit }
+              f
+            ' CHANGELOG.md
+            cat <<'EOF'
+
+          ### Install
+
+          1. Close OBS Studio (33 or newer, 64-bit Windows).
+          2. Extract `obs-indicator-*-windows-x64.zip` into `C:\ProgramData\obs-studio\plugins\`, so that you get
+             `C:\ProgramData\obs-studio\plugins\obs-indicator\obs-indicator.dll`.
+          3. Start OBS and open **Tools → Overlay Indicator**.
+
+          The `-pdb.zip` holds debug symbols, which are only needed for crash analysis.
+          EOF
+          } > notes.md
+
+          gh release create "v$VERSION" dist/*.zip --target "$GITHUB_SHA" --title "obs-indicator $VERSION" \
+            --notes-file notes.md

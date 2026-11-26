@@ -1,0 +1,101 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+#include <windows.h>
+#include <commctrl.h>
+#include "resource.h"
+
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+#define UPDOWN_STYLE UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS
+#define DROPDOWN_STYLE CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+IDD_SETTINGS DIALOGEX 0, 0, 330, 338
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Overlay Indicator"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    AUTOCHECKBOX    "&Enable the on-screen overlay", IDC_ENABLED, 10, 8, 200, 10
+
+    GROUPBOX        "Status indicator", IDC_STATIC, 7, 24, 316, 98
+    AUTOCHECKBOX    "Show status &indicator", IDC_IND_SHOW, 15, 38, 130, 10
+    RTEXT           "Position:", IDC_IND_CORNER_LABEL, 186, 39, 44, 8
+    COMBOBOX        IDC_IND_CORNER, 234, 36, 82, 80, DROPDOWN_STYLE
+    LTEXT           "Show icons for:", IDC_IND_LABEL_ICONS, 15, 55, 56, 8
+    AUTOCHECKBOX    "Recording", IDC_IND_REC, 74, 54, 52, 10
+    AUTOCHECKBOX    "Streaming", IDC_IND_STREAM, 128, 54, 52, 10
+    AUTOCHECKBOX    "Replay buffer", IDC_IND_REPLAY, 182, 54, 62, 10
+    AUTOCHECKBOX    "Virtual camera", IDC_IND_VCAM, 248, 54, 68, 10
+    AUTOCHECKBOX    "Show elapsed &time next to recording and streaming", IDC_IND_TIMER, 15, 70, 250, 10
+    LTEXT           "Microphone:", IDC_MIC_LABEL, 15, 88, 44, 8
+    COMBOBOX        IDC_MIC_MODE, 60, 85, 86, 60, DROPDOWN_STYLE
+    RTEXT           "Source:", IDC_MIC_SOURCE_LABEL, 150, 88, 30, 8
+    COMBOBOX        IDC_MIC_SOURCE, 184, 85, 132, 160, DROPDOWN_STYLE
+    LTEXT           "Icons only appear while something is being recorded, streamed or buffered.", IDC_STATIC, 15, 105, 300, 9
+
+    GROUPBOX        "Notifications", IDC_STATIC, 7, 128, 316, 78
+    AUTOCHECKBOX    "Show &notifications", IDC_TOAST_SHOW, 15, 142, 130, 10
+    RTEXT           "Position:", IDC_TOAST_CORNER_LABEL, 186, 143, 44, 8
+    COMBOBOX        IDC_TOAST_CORNER, 234, 140, 82, 80, DROPDOWN_STYLE
+    LTEXT           "Notify about:", IDC_TOAST_LABEL_ABOUT, 15, 159, 56, 8
+    AUTOCHECKBOX    "Recording", IDC_N_REC, 74, 158, 52, 10
+    AUTOCHECKBOX    "Streaming", IDC_N_STREAM, 128, 158, 52, 10
+    AUTOCHECKBOX    "Replay buffer", IDC_N_REPLAY, 182, 158, 62, 10
+    AUTOCHECKBOX    "Screenshots", IDC_N_SHOT, 248, 158, 68, 10
+    AUTOCHECKBOX    "Virtual camera", IDC_N_VCAM, 74, 172, 62, 10
+    AUTOCHECKBOX    "Microphone mute", IDC_N_MIC, 140, 172, 80, 10
+    LTEXT           "Show for:", IDC_TOAST_LABEL_FOR, 15, 189, 40, 8
+    EDITTEXT        IDC_TOAST_SECS, 60, 187, 36, 12, ES_NUMBER | ES_AUTOHSCROLL
+    CONTROL         "", IDC_TOAST_SECS_SPIN, "msctls_updown32", UPDOWN_STYLE, 96, 187, 10, 12
+    LTEXT           "seconds", IDC_TOAST_LABEL_SECS, 100, 189, 40, 8
+
+    GROUPBOX        "Appearance", IDC_STATIC, 7, 212, 316, 84
+    LTEXT           "Display:", IDC_STATIC, 15, 226, 40, 8
+    COMBOBOX        IDC_MONITOR, 60, 223, 256, 120, DROPDOWN_STYLE
+    LTEXT           "Size:", IDC_STATIC, 15, 243, 40, 8
+    EDITTEXT        IDC_SCALE, 60, 241, 36, 12, ES_NUMBER | ES_AUTOHSCROLL
+    CONTROL         "", IDC_SCALE_SPIN, "msctls_updown32", UPDOWN_STYLE, 96, 241, 10, 12
+    LTEXT           "%", IDC_STATIC, 100, 243, 10, 8
+    RTEXT           "Opacity:", IDC_STATIC, 116, 243, 34, 8
+    EDITTEXT        IDC_OPACITY, 154, 241, 36, 12, ES_NUMBER | ES_AUTOHSCROLL
+    CONTROL         "", IDC_OPACITY_SPIN, "msctls_updown32", UPDOWN_STYLE, 190, 241, 10, 12
+    LTEXT           "%", IDC_STATIC, 194, 243, 10, 8
+    RTEXT           "Margin:", IDC_STATIC, 210, 243, 30, 8
+    EDITTEXT        IDC_MARGIN, 244, 241, 36, 12, ES_NUMBER | ES_AUTOHSCROLL
+    CONTROL         "", IDC_MARGIN_SPIN, "msctls_updown32", UPDOWN_STYLE, 280, 241, 10, 12
+    LTEXT           "px", IDC_STATIC, 284, 243, 12, 8
+    LTEXT           "Accent color:", IDC_STATIC, 15, 261, 44, 8
+    LTEXT           "", IDC_ACCENT_SWATCH, 60, 259, 36, 12, WS_BORDER
+    PUSHBUTTON      "&Choose...", IDC_ACCENT_PICK, 102, 258, 50, 14
+    AUTOCHECKBOX    "&Hide the overlay from screen capture and recordings", IDC_HIDE_CAPTURE, 15, 278, 290, 10
+
+    LTEXT           "Tip: bind ""Toggle overlay indicator"" in OBS Settings > Hotkeys.", IDC_HOTKEY_HINT, 10, 304, 310, 9
+
+    PUSHBUTTON      "&Preview", IDC_PREVIEW, 7, 318, 60, 14
+    DEFPUSHBUTTON   "OK", IDOK, 209, 318, 54, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 269, 318, 54, 14
+END
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION PLUGIN_VERSION_RC
+ PRODUCTVERSION PLUGIN_VERSION_RC
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_DLL
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "FileDescription", "OBS Studio on-screen recording indicator"
+            VALUE "FileVersion", PLUGIN_VERSION
+            VALUE "ProductName", "obs-indicator"
+            VALUE "ProductVersion", PLUGIN_VERSION
+            VALUE "LegalCopyright", "GPL-2.0-or-later"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
