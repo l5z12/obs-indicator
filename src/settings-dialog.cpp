@@ -462,8 +462,15 @@ INT_PTR CALLBACK DlgProc(HWND d, UINT msg, WPARAM wp, LPARAM lp)
 			EndDialog(d, IDCANCEL);
 			return TRUE;
 		case IDC_PREVIEW:
-			if (st->ctx->preview)
-				st->ctx->preview(ReadControls(d, *st));
+			if (st->ctx->preview) {
+				// Preview is for the overlay's look, so it keeps the saved "show over fullscreen
+				// games" choice: turning that on injects a helper into Explorer.exe, which should
+				// only happen once the user clicks OK.
+				Settings p = ReadControls(d, *st);
+				p.show_over_fullscreen = st->original.show_over_fullscreen;
+				p.fullscreen_band = st->original.fullscreen_band;
+				st->ctx->preview(p);
+			}
 			return TRUE;
 		case IDC_ACCENT_PICK:
 			PickColor(d, *st);
