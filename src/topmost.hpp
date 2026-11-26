@@ -27,8 +27,9 @@ public:
 	// Drop `hwnd` back to the normal desktop band. No-op if the feature was never initialised.
 	void Lower(HWND hwnd);
 
-	// Release the Explorer.exe helper and unload the DLL. Call once on overlay shutdown.
-	void Shutdown();
+	// Remove the Explorer.exe helper and unload the DLL. Lower() the windows first if they should
+	// stay. A later Raise() starts the helper again. Also runs on destruction.
+	void Release();
 
 	// Whether init has been attempted and failed (so the UI/log can explain the no-op).
 	bool Failed() const { return init_failed_; }

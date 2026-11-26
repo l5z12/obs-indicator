@@ -375,7 +375,7 @@ struct Overlay::Impl {
 			UnhookWinEvent(fg_hook);
 			fg_hook = nullptr;
 		}
-		topmost.Shutdown();
+		topmost.Release();
 		ind_win.Destroy();
 		toast_win.Destroy();
 		if (HWND c = ctrl.exchange(nullptr))
@@ -504,7 +504,8 @@ struct Overlay::Impl {
 
 	// Raise the overlay windows into a high z-order band so they show over fullscreen games, or
 	// drop them back when the option is turned off. The first raise injects a helper into
-	// Explorer.exe (via WindowTopMost), so it only runs when the user opts in.
+	// Explorer.exe (via WindowTopMost), so it only runs when the user opts in, and turning the
+	// option off removes the helper again.
 	void ApplyTopMost()
 	{
 		if (settings.show_over_fullscreen) {
@@ -519,6 +520,7 @@ struct Overlay::Impl {
 		} else {
 			topmost.Lower(ind_win.hwnd);
 			topmost.Lower(toast_win.hwnd);
+			topmost.Release();
 		}
 	}
 

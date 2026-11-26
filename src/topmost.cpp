@@ -33,7 +33,7 @@ std::wstring SiblingPath(HMODULE module, const wchar_t *name)
 
 TopMost::~TopMost()
 {
-	Shutdown();
+	Release();
 }
 
 bool TopMost::EnsureInit(HMODULE module)
@@ -99,7 +99,7 @@ void TopMost::UninitAndUnload()
 	dll_ = nullptr;
 }
 
-void TopMost::Shutdown()
+void TopMost::Release()
 {
 	if (dll_)
 		UninitAndUnload();
