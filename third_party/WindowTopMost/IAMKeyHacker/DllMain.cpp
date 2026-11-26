@@ -733,17 +733,13 @@ void CALLBACK IAMWorkerWindowLoopThread(
     UpdateWindow(hWorkerWindow);
     
     // Main message loop
+    // obs-indicator patch: block in GetMessage instead of polling with PeekMessage + Sleep(50), so
+    // requests (sent messages) are handled at once instead of up to 50 ms later.
     DEBUGLOG("IAMWorkerWindowLoopThread: Window created successfully. Enter main loop. ");
     MSG Msg;
-    while (TRUE) {
-        if (PeekMessage(&Msg, nullptr, 0, 0, PM_REMOVE)) {
-            if (Msg.message == WM_QUIT) break;
-            TranslateMessage(&Msg);
-            DispatchMessage(&Msg);
-        }
-
-        // Wait for 50 milliseconds to avoid dead loops that consume CPU resources
-        Sleep(50);
+    while (GetMessage(&Msg, nullptr, 0, 0) > 0) {
+        TranslateMessage(&Msg);
+        DispatchMessage(&Msg);
     }
 
     // Cleanup

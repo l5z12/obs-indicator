@@ -343,23 +343,32 @@ DWORD CALLBACK WTMControllerWindowThread(
     UpdateWindow(IAMControllerWindow.hWnd);
 
     // Main message loop
+    // obs-indicator patch: block in GetMessage instead of polling with PeekMessage + Sleep(50), so
+    // IAMWorker's responses (sent messages) are handled at once instead of up to 50 ms later.
     DEBUGLOG("WTMControllerWindowThread: hWindow created successfully. Enter main loop. ");
     MSG Msg;
-    while (TRUE) {
-        if (PeekMessage(&Msg, nullptr, 0, 0, PM_REMOVE)) {
-            if (Msg.message == WM_QUIT) break;
-            TranslateMessage(&Msg);
-            DispatchMessage(&Msg);
-        }
-
-        // Wait for 50 milliseconds to avoid dead loops that consume CPU resources
-        Sleep(50);
+    while (GetMessage(&Msg, nullptr, 0, 0) > 0) {
+        TranslateMessage(&Msg);
+        DispatchMessage(&Msg);
     }
 
     // Cleanup
     UnregisterClass(IAMCONTROLLER_WINDOW_CLASSNAME, hInstance);
     IAMControllerWindow.ThreadStop.LeaveThread();
     return 0;
+}
+
+// obs-indicator patch: send a WM_COPYDATA message to the IAMWorker window in Explorer.EXE with a
+// timeout (upstream used SendMessage, which blocks for as long as Explorer.EXE is hung). Returns
+// the window's result, or sets the last error and returns a non-ERROR_SUCCESS value on failure.
+static LRESULT WTMSendToWorker(HWND hWorkerWnd, WPARAM wParam, COPYDATASTRUCT* pData) {
+    DWORD_PTR nResult = 0;
+    if (!SendMessageTimeout(hWorkerWnd, WM_COPYDATA, wParam, (LPARAM)pData, SMTO_ABORTIFHUNG,
+                            IAMWORKER_TIMEOUT, &nResult)) {
+        DWORD nErr = GetLastError();
+        return nErr != ERROR_SUCCESS ? (LRESULT)nErr : (LRESULT)ERROR_TIMEOUT;
+    }
+    return (LRESULT)nResult;
 }
 
 // Check if the operating system meets the requirements
@@ -535,7 +544,7 @@ BOOL WTMAPI WTMInit() {
     TempMessage.dwData = WM_IAMWORKERHELLO;
     TempMessage.lpData = NULL;
     TempMessage.cbData = 0;
-    LRESULT bRes = SendMessage(hWorkerWindow, WM_COPYDATA, (WPARAM)IAMControllerWindow.hWnd, (LPARAM)&TempMessage);
+    LRESULT bRes = WTMSendToWorker(hWorkerWindow, (WPARAM)IAMControllerWindow.hWnd, &TempMessage);
     if (bRes != ERROR_SUCCESS) {
         DEBUGERR("WTMInit: Can not send WM_IAMWORKERHELLO message");
         SetLastError(bRes);
@@ -560,7 +569,7 @@ BOOL WTMAPI WTMInit() {
     TempMessage.dwData = WM_IAMWORKERSTART;
     TempMessage.lpData = NULL;
     TempMessage.cbData = 0;
-    bRes = SendMessage(hWorkerWindow, WM_COPYDATA, (WPARAM)IAMControllerWindow.hWnd, (LPARAM)&TempMessage);
+    bRes = WTMSendToWorker(hWorkerWindow, (WPARAM)IAMControllerWindow.hWnd, &TempMessage);
     if (bRes != ERROR_SUCCESS) {
         DEBUGERR("WTMInit: Can not send WM_IAMWORKERSTART message");
         SetLastError(bRes);
@@ -762,29 +771,22 @@ BOOL WTMAPI WTMSetWindowBand(
 	_In_opt_    HWND hWndInsertAfter,
 	_In_opt_    DWORD dwBand
 )  {
-    if (!WTMCheckForDll()) {
+    // obs-indicator patch: this runs on the caller's UI thread, so it must be quick. Upstream took
+    // a module snapshot of Explorer.EXE on every call and slept at least 2 x 50 ms even when the
+    // answer was already there. A successful WTMInit has already waited for IAMWorker's hello, so
+    // readiness is checked without waiting, and the worker window stands in for the snapshot.
+    if (!IAMControllerWindow.bIsReady) {
         SetLastError(ERROR_WTM_WORKER_HAS_NOT_LOADED);
         return FALSE;
     }
 
     UINT nTime = 0;
     BOOL bIsReady = FALSE;
-    
-    // Wait for the backend to be ready (check if the flag file has been generated)
-    for (nTime = 0, bIsReady = FALSE; !bIsReady && nTime <= IAMWORKER_TIMEOUT; nTime += 50) {
-        if (IAMControllerWindow.bIsReady) bIsReady = TRUE;
-        Sleep(50);
-    }
-    if (!bIsReady) {
-        SetLastError(ERROR_WTM_COMMUNICATION_MESSAGING);
-        DEBUGERR("WTMSetWindowBand: IAMWorker ready timeout");
-        return FALSE;
-    }
-    
+
     // Get collection window handle
     HWND hCollectorWnd = FindWindow(IAMWORKER_WINDOW_CLASSNAME, NULL);
     if (hCollectorWnd == NULL) {
-        SetLastError(ERROR_WTM_COMMUNICATION_MESSAGING);
+        SetLastError(ERROR_WTM_WORKER_HAS_NOT_LOADED);
         return FALSE;
     }
 
@@ -800,17 +802,22 @@ BOOL WTMAPI WTMSetWindowBand(
     RequestDataInfo.dwData = WM_IAM_OPERATION_REQUEST;
     RequestDataInfo.cbData = sizeof(IAMWorkerRequest);
     RequestDataInfo.lpData = &RequestData;
-    LRESULT nRes = SendMessage(hCollectorWnd, WM_COPYDATA, NULL, (LPARAM)&RequestDataInfo);
+    IAMControllerWindow.Response.bCollected = FALSE; // drop a late answer to an earlier, timed-out call
+    LRESULT nRes = WTMSendToWorker(hCollectorWnd, NULL, &RequestDataInfo);
     if (nRes != ERROR_SUCCESS) {
-        SetLastError(nRes);
+        SetLastError((DWORD)nRes);
         DEBUGERR("WTMSetWindowBand: Can not send message to IAMWorker window");
         return FALSE;
     }
 
-    // Collect response
-    for (nTime = 0, bIsReady = FALSE; !bIsReady && nTime <= IAMWORKER_TIMEOUT; nTime += 50) {
-        if (IAMControllerWindow.Response.bCollected) bIsReady = TRUE;
-        Sleep(50);
+    // Collect response. IAMWorker sends it before its WM_COPYDATA handler returns, so it is
+    // normally here already: check before sleeping.
+    for (nTime = 0, bIsReady = FALSE; nTime <= IAMWORKER_TIMEOUT; nTime += 10) {
+        if (IAMControllerWindow.Response.bCollected) {
+            bIsReady = TRUE;
+            break;
+        }
+        Sleep(10);
     }
     if (!bIsReady) {
         SetLastError(ERROR_WTM_COMMUNICATION_MESSAGING);
