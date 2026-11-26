@@ -59,6 +59,11 @@ struct tag_IAMControllerWindow {
     }
 } IAMControllerWindow;
 
+// obs-indicator patch: whether this process injected the IAMWorker that is in Explorer.EXE. Only
+// then do WTMUninit and DLL unload remove it, so a second process using this library (such as a
+// second OBS) can't unload a helper that belongs to the first.
+static BOOL bWorkerInjected = FALSE;
+
 // Get IAMWorker DLL path
 // obs-indicator patch: resolve IAMKeyHacker.dll next to THIS module (WindowTopMost.dll),
 // not next to the host process executable (GetModuleFileName(NULL, ...)). When loaded as a
@@ -406,8 +411,18 @@ _Success_(return == TRUE)
 BOOL WTMAPI WTMInit() {
 
     // Inject IAMWorker to Explorer.EXE to start the backend program
-    
-    // If already injected, uninstall and inject again
+
+    // obs-indicator patch: IAMWorker sends every response to whichever IAMController window
+    // FindWindow returns, so only one process can control it at a time. If another process has
+    // a controller window, leave its IAMWorker alone instead of unloading and replacing it.
+    if (FindWindow(IAMCONTROLLER_WINDOW_CLASSNAME, NULL) != NULL) {
+        DEBUGERR("WTMInit: Another process is controlling IAMWorker");
+        SetLastError(ERROR_WTM_IN_USE);
+        return FALSE;
+    }
+
+    // If already injected, uninstall and inject again (with no controller window left, it is a
+    // leftover from a process that exited without WTMUninit)
     if (WTMCheckForDll()) {
         DEBUGLOG("WTMInit: IAMWorker image is already injected. Inject again.");
         if (!WTMUnloadWorker()) {
@@ -472,6 +487,7 @@ BOOL WTMAPI WTMInit() {
         SetLastError(ERROR_WTM_WORKER_CONTROL);
         return FALSE;
     }
+    bWorkerInjected = TRUE; // from here on, ours to unload (even if the wait below times out)
 
     // Waiting for thread to end (obs-indicator patch: bounded)
     if (WaitForSingleObject(hThread, WTM_REMOTE_THREAD_TIMEOUT) != WAIT_OBJECT_0) {
@@ -612,8 +628,12 @@ static BOOL WTMStopController() {
 // keep this DLL loaded, because its thread may still be running.
 _Success_(return == TRUE)
 BOOL WTMAPI WTMUninit() {
-    // Uninstall IAMWorker From Explorer.EXE to close the background program (no-op if it is gone)
-    BOOL bWorkerUnloaded = WTMUnloadWorker();
+    // Uninstall IAMWorker From Explorer.EXE to close the background program (no-op if it is gone,
+    // or if another process injected it)
+    BOOL bWorkerUnloaded = !bWorkerInjected || WTMUnloadWorker();
+    if (bWorkerUnloaded) {
+        bWorkerInjected = FALSE;
+    }
 
     // Close IAMController window and wait for its thread
     if (!WTMStopController()) {
@@ -1322,8 +1342,8 @@ BOOL APIENTRY DllMain(
 
     case DLL_PROCESS_DETACH:
 
-        // Unload IAMWorker
-        if (!WTMUnloadWorker()) {
+        // Unload IAMWorker (obs-indicator patch: only one this process injected)
+        if (bWorkerInjected && !WTMUnloadWorker()) {
             DEBUGERR("DllMain: Unload IAMWorker error");
         }
 

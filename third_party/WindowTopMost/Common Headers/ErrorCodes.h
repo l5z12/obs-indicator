@@ -96,7 +96,15 @@
 #define ERROR_WTM_ENVIRONMENT						(0x3F08)
 #define ERROR_WTM_ENVIRONMENT__DESC					"This library cannot run in the current environment."
 
-#define ERROR_WTM__TAIL								(0x3F09)
+//
+// ERROR_WTM_IN_USE (obs-indicator patch)
+//
+// Another process is already controlling IAMWorker.
+//
+#define ERROR_WTM_IN_USE							(0x3F09)
+#define ERROR_WTM_IN_USE__DESC						"Another process is already controlling IAMWorker."
+
+#define ERROR_WTM__TAIL								(0x3F0A)
 
 // Determine whether the error code belongs to the library
 BOOL WTMIsWTMError(DWORD nErrorCode) {
@@ -115,6 +123,7 @@ LPCTSTR WTMGetErrorDescription(DWORD nErrorCode) {
 	EDMITEM(ERROR_WTM_COMMUNICATION_PROCESSING);
 	EDMITEM(ERROR_WTM_WORKER_CONTROL);
 	EDMITEM(ERROR_WTM_ENVIRONMENT);
+	EDMITEM(ERROR_WTM_IN_USE);
 	}
 	return TEXT("Unknown error.");
 #undef EDMITEM
