@@ -10,9 +10,10 @@ To publish a version that's in `CMakeLists.txt` but has no tag yet, such as the 
 workflow by hand on `main`.
 
 - Don't edit the version or `CHANGELOG.md` by hand.
+- `main` only accepts squash-merged pull requests that pass the **Windows x64** build. Release pull requests
+  included: CI starts their build itself. If one is stuck waiting for that check, run the **Build** workflow by hand
+  on `release`.
 - The repo setting *Allow GitHub Actions to create and approve pull requests* must stay on.
-- The release pull request gets no build check, because GitHub doesn't run workflows on pull requests opened by
-  Actions. The build runs once it's merged.
 
 ## Updating OBS
 
