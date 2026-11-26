@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 # The version is the single source of truth for the DLL, manifest.json and release zips. Knope bumps it when
-# releasing (see CONTRIBUTING.md); keep "project(obs-indicator VERSION x.y.z" on one line so it can find it.
+# releasing; keep "project(obs-indicator VERSION x.y.z" on one line so it can find it.
 project(obs-indicator VERSION 1.0.0
   DESCRIPTION "ShadowPlay-style on-screen status indicator and notifications for OBS Studio"
   HOMEPAGE_URL "https://github.com/l5z12/obs-indicator"
